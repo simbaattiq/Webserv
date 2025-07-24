@@ -12,7 +12,7 @@ Constructing and sending Simple HTTP responses.
 [...]
     
 
-# A Simple map to hold RequestParser instances for each client.
+/* A Simple map to hold RequestParser instances for each client. */
 std::map<int, RequestParser> clientParsers;
 
 
