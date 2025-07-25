@@ -25,13 +25,45 @@ int main (int argc, char **argv)
         return (1);
     }
 
+
+    if (!srv->Setup())
+    {
+        cerr << "Cannot Setup Server\n\n";
+    }
+    
+
+
+    // mainloop;
+
+    while (1)
+    {
+        int client_fd = accept (srv->server_fd, NULL, NULL);
+
+        if (client_fd < 0)
+            continue;
+
+        cout << "request : \n" << srv->ReadRequest(client_fd) << endl;
+
+        const char* response =
+        "HTTP/1.1 200 OK\r\n"
+        "Content-Type: text/plain\r\n"
+        "Content-Length: 13\r\n"
+        "\r\n"
+        "Hello, World!";
+
+        send (client_fd, response, strlen (response), 0);
+        close (client_fd);
+
+        // tasks : parse request, generate response; cgi
+    }
+
     if (srv)
     {
         delete srv;
     }
 
 
-    cout << "starting server setup" << endl;
+    
     
     (void)argc;
     (void)argv;

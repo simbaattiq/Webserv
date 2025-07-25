@@ -4,6 +4,12 @@
 
 #include <iostream>
 #include <vector>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
+#include <cstring>
+#include <arpa/inet.h>
+
 using namespace std;
 
 class Server
@@ -74,6 +80,9 @@ class Server
     Location_Upload location_upload;
     size_t          max_body_size;
     Cgi_Bin cgi_bin;
+    int     server_fd;
+    bool Setup();
+    string ReadRequest(int client_Id);
 
 };
 
