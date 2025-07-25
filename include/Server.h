@@ -9,6 +9,8 @@
 #include <unistd.h>
 #include <cstring>
 #include <arpa/inet.h>
+#include "../include/Request.h"
+#include <queue>
 
 using namespace std;
 
@@ -83,6 +85,8 @@ class Server
     int     server_fd;
     bool Setup();
     string ReadRequest(int client_Id);
+
+    queue <Request> v_requests;
 
 };
 

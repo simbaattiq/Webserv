@@ -1,4 +1,4 @@
-SRCS=main.cpp srcs/Parser.cpp srcs/Server.cpp
+SRCS=main.cpp srcs/Parser.cpp srcs/Server.cpp srcs/Request.cpp
 OBJS=${SRCS:.cpp=.o}
 OUT=server
 CXX=c++

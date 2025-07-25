@@ -1,5 +1,6 @@
 #include <iostream>
 #include "include/Parser.h"
+#include "include/Request.h"
 
 
 using namespace std;
@@ -15,7 +16,6 @@ int main (int argc, char **argv)
 
 
     Parser parser (argv[1]);
-    
     Server *srv = parser.Parse();
 
 
@@ -31,8 +31,6 @@ int main (int argc, char **argv)
         cerr << "Cannot Setup Server\n\n";
     }
     
-
-
     // mainloop;
 
     while (1)
@@ -42,7 +40,16 @@ int main (int argc, char **argv)
         if (client_fd < 0)
             continue;
 
-        cout << "request : \n" << srv->ReadRequest(client_fd) << endl;
+        Request rqst(srv->ReadRequest(client_fd));
+
+        if (!rqst.Parse())
+        {
+            exit (2); // free ressources;
+        }
+
+        // cout << rqst.get_request_string() << endl;
+
+
 
         const char* response =
         "HTTP/1.1 200 OK\r\n"
@@ -55,6 +62,7 @@ int main (int argc, char **argv)
         close (client_fd);
 
         // tasks : parse request, generate response; cgi
+        // queue of request and start generating answers inside the queue.
     }
 
     if (srv)

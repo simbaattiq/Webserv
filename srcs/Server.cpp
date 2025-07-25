@@ -28,17 +28,19 @@ string Server::ReadRequest(int client_Id)
 {
     char buff[4096];
 
-    int byte = recv (client_Id, buff, sizeof(buff) - 1, 0);
+    string request = "";
+    int byte = 0;
 
-    if (byte > 0)
+    while ((byte = recv (client_Id, buff, sizeof(buff) - 1, 0)) > 0)
     {
         buff[byte] = '\0';
+        string tmp (buff);
 
-        string request (buff);
-        return (request);
+
+        request += tmp;
     }
 
-    return (NULL);
+    return (request);
 }
 
 bool Server::Setup()
