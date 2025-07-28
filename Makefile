@@ -1,19 +1,26 @@
-SRCS=main.cpp srcs/Parser.cpp srcs/Server.cpp srcs/Request.cpp
-OBJS=${SRCS:.cpp=.o}
-OUT=server
-CXX=c++
-CXXFLAGS= -Wall -Wextra -Werror -std=c++98  -fsanitize=address
-RM= rm -f
+NAME = webserv
+SRCDIR = src
+BUILDDIR = build
+SRCS = $(wildcard $(SRCDIR)/*.cpp)
+OBJS = $(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SRCS))
+CC = c++
+CCFLAGS = -Wall -Wextra -Werror -std=c++98
 
-All : ${OUT}
+all: $(NAME)
 
-${OUT} : ${OBJS}
-	${CXX} ${CXXFLAGS} ${OBJS} -o ${OUT}
+$(NAME): $(OBJS)
+	$(CC) $(CCFLAGS) $(OBJS) -o $(NAME)
+
+$(BUILDDIR)/%.o: $(SRCDIR)/%.cpp
+	@mkdir -p $(BUILDDIR)
+	$(CC) $(CCFLAGS) -c $< -o $@
 
 clean:
-	${RM} ${OBJS}
-fclean : clean
-	${RM} ${OUT}
-re : fclean All
+	rm -rf $(BUILDDIR)
 
-.PHONY: make re clean fclean
+fclean: clean
+	rm -f $(NAME)
+
+re: fclean all
+
+.PHONY: all clean fclean re
