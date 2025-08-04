@@ -52,12 +52,34 @@ bool Parser::_ReadData()
     return (true);
 }
 
+string Parser::_ReadData(string filetoread)
+{
+
+    fstream file (filetoread.c_str());
+        
+    if (!file.is_open())
+    {
+        std::cerr << "Failed to open file : " 
+            << filetoread << "\n";
+        return ("");
+    }
+
+    string line;
+    string result = "";
+
+    while (getline(file, line))
+    {
+        result += line;
+    }
+    return (result);
+}
+
 
 void Parser::v_clear()
 {
     while (_conf_line.size( ) > 0)
     {
-        _conf_line.pop_back();
+        
     }
 }
 
@@ -487,13 +509,10 @@ bool Parser::_ExtractData(Server *srv)
 
             Server::sterror error;
 
-            if (error_page.size() != 2)
+            if (error_page.size() != 1)
                 return (false);
 
-            error.err_number = atoi(error_page[0].c_str());
-            error.html_path = error_page[1];
-
-            srv->error.v_error.push_back(error);
+            srv->error.error.html_path = error_page[0];
         }
 
         else if (line.find("client_max_body_size") != string::npos)
@@ -710,7 +729,26 @@ bool Parser::_ValidateData(Server *srv)
 {
     cout << "hey validate  data to do .\n";
 
-    (void)srv;
+    cout << "Just Reading:" << srv->location.index << endl;
+
+    srv->location.index_content = _ReadData(srv->location.root + "/" + 
+           srv->location.index );
+
+    if (srv->location.index_content.empty())
+    {
+        cerr << "cannot read " << srv->location.index << "\n";
+        return (false);
+    }
+
+     cout << "Just Reading:" << srv->error.error.html_path << endl;
+    
+    srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+
+    if (srv->error.error.html_content.empty())
+    {
+        cerr << "cannot read " <<srv->error.error.html_path << "\n";
+        return (false);
+    }
 
     return (true);
 }

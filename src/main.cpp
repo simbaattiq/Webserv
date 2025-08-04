@@ -30,6 +30,7 @@ void handleNewConnection(Socket& serverSocket, EventHandler& eventHandler)
 
 }
 
+
 void handleClientData(int client_fd, EventHandler& eventHandler)
 {
     char buffer[2048]; // Increased buffer!!
@@ -40,7 +41,68 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
         buffer[bytes_read] = '\0';
         std::string rawRequest(buffer);
 
-        std::cout << "Received from client " << client_fd << ":\n" << rawRequest << std::endl;
+
+        RequestParser& parser = clientParsers[client_fd];
+        ResponseBuilder responseBuilder;
+
+        if (!parser.parse(rawRequest))
+        {
+            std::cerr << "Failed to parse request from client " << client_fd << std::endl;
+        }
+        else
+        {
+            std::cout << "Parsed Request - Method: " << parser.getMethod()
+                      << ", URI: " << parser.getUri() << std::endl;
+
+            parser.ValidateDataForResponse(responseBuilder);
+
+            std::string httpResponse = responseBuilder.build();
+            send(client_fd, httpResponse.c_str(), httpResponse.length(), 0);
+            std::cout << "Sent response to client " << client_fd << ":\n" << httpResponse << std::endl;
+
+           cout << httpResponse << endl;
+            
+
+            // if (responseBuilder.Connection == responseBuilder.CLOSE)
+            // {
+                eventHandler.removeFd(client_fd);
+                close(client_fd);
+                clientParsers.erase(client_fd);
+            // }
+        }
+    }
+    else if (bytes_read == 0)
+    {
+        std::cout << "Client " << client_fd << " disconnected." << std::endl;
+        // eventHandler.removeFd(client_fd);
+        // close(client_fd);
+        // clientParsers.erase(client_fd);
+    }
+    else
+    {
+        // Error or no data (EAGAIN/EWOULDBLOCK for non-blocking)
+        if (errno != EAGAIN && errno != EWOULDBLOCK)
+        {
+            perror("recv");
+            std::cerr << "Error reading from client " << client_fd << std::endl;
+            eventHandler.removeFd(client_fd);
+            close(client_fd);
+            clientParsers.erase(client_fd);
+        }
+    }
+}
+
+/*void handleClientData(int client_fd, EventHandler& eventHandler)
+{
+    char buffer[2048]; // Increased buffer!!
+    int bytes_read = recv(client_fd, buffer, sizeof(buffer) - 1, 0);
+
+    if (bytes_read > 0)
+    {
+        buffer[bytes_read] = '\0';
+        std::string rawRequest(buffer);
+
+        // std::cout << "Received from client " << client_fd << ":\n" << rawRequest << std::endl;
 
         RequestParser& parser = clientParsers[client_fd];
         ResponseBuilder responseBuilder;
@@ -109,7 +171,7 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
             clientParsers.erase(client_fd);
         }
     }
-}
+}*/
 
 
 Server *srv = NULL;
@@ -192,5 +254,10 @@ int main(int argc, char **argv)
         std::cerr << "Server error: " << e.what() << std::endl;
         return 1;
     }
+
+
+    if (srv)
+        delete (srv);
+
     return 0;
 }

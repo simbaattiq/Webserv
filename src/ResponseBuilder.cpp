@@ -1,10 +1,13 @@
 #include "ResponseBuilder.hpp"
 #include <cstdlib>
+#include <string>
 
 
 
-ResponseBuilder::ResponseBuilder() 
+
+ResponseBuilder::ResponseBuilder()
 {
+    Connection = KEEP_ALIVE;
     clear();
 }
 
@@ -54,7 +57,7 @@ std::string ResponseBuilder::build() const
     // Headers
     // add Content-Length header if body exists and not already present
     bool contentLengthSet = false;
-    for (size_t i = 0; i < _headers.size(); ++i) 
+    for (size_t i = 0; i < _headers.size(); ++i)
     {
         if (_headers[i].first == "Content-Length") 
         {
@@ -78,4 +81,29 @@ std::string ResponseBuilder::build() const
     oss << _body;
 
     return oss.str();
+}
+
+string ResponseBuilder::Replace_html_error_message(string body, int statuscode, string statusMessage)
+{
+    std::string html = body;
+
+    size_t pos;
+    pos = html.find("{{STATUS}}");
+    if (pos != std::string::npos)
+    {
+        string statusStr = intToString(statuscode);
+        html.replace(pos, 10, statusStr);
+    }
+    else
+    {
+        cout << "{{STATUS}} not found in HTML!" << endl;
+    }
+
+    pos = html.find("{{MESSAGE}}");
+    if (pos != std::string::npos)
+    {
+        html.replace(pos, 11, statusMessage);
+    }
+
+    return html;
 }

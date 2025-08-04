@@ -22,8 +22,8 @@ class Server
 
         struct sterror
         {
-           int err_number;
            string html_path;
+           string html_content;
         };
 
     private :
@@ -38,8 +38,7 @@ class Server
     {
         public :      
             Error ();
-            vector <Server::sterror> v_error;
-            int get_length();
+            sterror error;
             ~Error();
     };
 
@@ -48,6 +47,7 @@ class Server
         public :
             string root;
             string index;
+            string index_content;
             bool autoindex;
             vector <string> methods;
     };

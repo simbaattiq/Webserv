@@ -18,6 +18,7 @@ class Parser
       bool      _isFileOpend();
       // ifstream  *_file;
       bool _ReadData();
+      string  _ReadData(string s);
       bool _ValidateData(Server *srv);
       bool _ExtractData(Server *srv);
       vector <string> _conf_line;

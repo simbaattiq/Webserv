@@ -13,10 +13,6 @@ Server::Error::Error()
 
 }
 
-int Server::Error::get_length()
-{
-    return (v_error.size());
-}
 
 Server::Error::~Error()
 {

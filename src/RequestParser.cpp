@@ -2,6 +2,7 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include "StatusCodes.hpp"
 
 RequestParser::RequestParser() {
     clear();
@@ -43,79 +44,263 @@ std::string RequestParser::trim(const std::string& str) const
 }
 
 
-bool RequestParser::parse(const std::string& raw_request)
+
+int findindex( string s   , char  c)
 {
-    clear();
-
-    size_t first_crlf = find_crlf(raw_request);
-    if (first_crlf == std::string::npos)
+    for (size_t i = 0; i < s.length(); i++)
     {
-        return false;
+        if (s[i] == c)
+            return (i);
     }
+    return (-1);
+}
 
-    std::string request_line = raw_request.substr(0, first_crlf);
-    std::istringstream iss(request_line);
 
-    std::string method_str, uri_str, httpVersion_str;
+bool RequestParser::_Extract_Request_Data(vector <string> v_request)
+{
 
-    iss >> method_str >> uri_str >> httpVersion_str;
+    if (v_request.empty())
+        return (false);
 
-    _method = trim(method_str);
-    _uri = trim(uri_str);
-    _httpVersion = trim(httpVersion_str);
+    stringstream iss(v_request[0]);
+
+    iss >> _method >> _uri >> _httpVersion;
 
     if (_method.empty() || _uri.empty() || _httpVersion.empty())
     {
+        cerr << "Invalid request line!" << std::endl;
         return false;
     }
-
-    size_t header_start = first_crlf + 2; // skip first CRLF
-    size_t body_start = find_crlfcrlf(raw_request, header_start);
-
-    if (body_start == std::string::npos)
+    else
     {
-        // if no double CRLF found == no body or malformed request
-        body_start = raw_request.length(); // treat the rest as headers
+        cout << "Request line : \n";
+        cout << getMethod() << " " << getUri()  << " " << getHttpVersion() << endl;
     }
 
-
-    size_t headers_length = 0;
-    if (body_start > header_start) {
-        headers_length = body_start - header_start;
-    }
-
-    std::string headers_str = raw_request.substr(header_start, headers_length);
-    std::istringstream header_iss(headers_str);
-    std::string line;
-
-    while (std::getline(header_iss, line) && line != "\r")
+    size_t i = 1;
+    bool endofheaders = false;
+    for ( ;  i < v_request.size(); i++)
     {
-        if (line.length() < 2) 
-            continue;
+        string line = v_request[i];
 
-        // remove trailing '\r' if present (from \r\n)
-        if (line[line.length() - 1] == '\r')
+        if (line.empty())
         {
-            line = line.substr(0, line.length() - 1);
+            endofheaders = true;
+            i++;
+            break;
         }
 
-        size_t colon_pos = line.find(":");
-        if (colon_pos != std::string::npos)
-        {
-            std::string key = line.substr(0, colon_pos);
-            std::string value = line.substr(colon_pos + 1);
+        size_t pos = line.find(':');
 
-            _headers[trim(key)] = trim(value);
+        if (pos != string::npos)
+        {
+            string header_name = trim(line.substr(0, pos));
+            string header_value = trim (line.substr(pos + 1));
+
+            _headers[header_name] = header_value;
         }
     }
 
-    if (body_start != raw_request.length()) 
+    if (getMethod() != "Post")
+        return (true);
+
+    if (endofheaders && i < v_request.size())
     {
-        _body = raw_request.substr(body_start + 4); // skip double CRLF
+        for (; i < v_request.size(); i++)
+        {
+            if (!_body.empty())
+                _body += '\n';
+            _body += v_request[i];
+        }
     }
+    else
+    {
+        cout << "Header not closed proprerly\n";
+        return (false);
+    }
+    return (true);
+}
+
+
+bool RequestParser::parse(const std::string& raw_request)
+{
+    clear();
+    vector <string> v_lines;
+    string line =  raw_request;
+    
+    size_t tmp_pos = 0;
+    size_t pos = 0;
+    while (( pos = line.find("\r\n", tmp_pos)) != string::npos)
+    {
+        string temp = line.substr(tmp_pos, pos - tmp_pos);
+        v_lines.push_back(temp);
+
+        tmp_pos = pos + 2;
+
+
+        if (tmp_pos < line.length() &&   line.substr(tmp_pos, 2)  == "\r\n" )
+        {
+            v_lines.push_back( "");
+            tmp_pos += 2;
+
+            if (tmp_pos < line.length())
+            {
+                string rest = line.substr(tmp_pos);
+                v_lines.push_back(rest);
+            }
+            break;
+        }
+    }
+
+    if (tmp_pos < line.length() && pos==string::npos)
+    {
+        string rest = line.substr(tmp_pos);
+
+        if (!rest.empty())
+            v_lines.push_back(rest);
+    }
+
+    if (!_Extract_Request_Data(v_lines))
+        return (false);
 
     return true;
 }
+
+
+bool isFileAccessible(string s)
+{
+    if (access(s.c_str(), F_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
+bool CanWeReadAFile(string s)
+{
+    if (access(s.c_str(), R_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
+
+bool RequestParser::_isHttpSupported ()
+{
+    if (_httpVersion.empty())
+        return (false);
+
+    if (!(_httpVersion == "HTTP/1.1"))
+        return (false);
+    return (true);
+}
+
+bool isMethodAuthorised(string Method , vector <string> methods )
+{
+    for (size_t i = 0; i < methods.size(); i++)
+    {
+        if (methods[i] == Method)
+            return (true);
+    }
+    return (false);
+}
+
+
+bool isHeaderNameExist(string HeaderName, map <string, string> headers)
+{
+
+    if (headers.find(HeaderName) == headers.end() 
+        || headers[HeaderName].empty())
+        return (false);
+
+    return (true);
+}
+
+
+
+
+
+bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
+{
+
+    (void)response;
+    int statuscode = 200;
+    // chech auto index but is insecure; unsafe  to list 
+
+    if (_uri == "/")
+    {
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+    }
+    else
+    {
+        cout << "URL not found\n";
+        statuscode = 400;
+    }
+
+    string MessageStatus = StatusCodes::getStatusMessage(statuscode);
+    response.setStatus(statuscode, MessageStatus);
+    response.addHeader("Content-Type", "text/html");
+
+    if (statuscode == 200)
+    {
+        response.setBody(srv->location.index_content);
+    }
+    else
+    {
+        string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                statuscode, MessageStatus);
+        response.setBody(body);
+        // serve the error html;
+    }
+    
+    return (true);
+}
+
+
+bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
+{
+
+    if (_method == "GET")
+    {
+        response.Method = response.GET;
+        _Check_Get_Method(response);
+        
+    }
+
+    else if (_method == "DELETE")
+    {
+        response.Method = response.DELETE;
+    }
+    else if (_method == "POST")
+    {
+        response.Method = response.POST;
+    }
+    else
+    {
+        cerr << "error in METHOD\n";
+        response.Method = response.ERROR;
+        return (false);
+    }
+
+    if (!_headers["Connection"].empty())
+    {
+        if (_headers["Connection"] == "close")
+            response.Connection = response.CLOSE;
+    }
+    return (true);
+}
+
+
+
+
 
 const std::string& RequestParser::getMethod() const { return _method; }
 

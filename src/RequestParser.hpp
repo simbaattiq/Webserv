@@ -1,9 +1,17 @@
 #ifndef REQUEST_PARSER_HPP
 #define REQUEST_PARSER_HPP
 
+using namespace std;
+
 #include <string>
 #include <map>
 #include <stdexcept>
+#include <vector>
+#include "ResponseBuilder.hpp"
+#include "../include/Server.h"
+
+extern Server *srv;
+
 
 class RequestParser 
 {
@@ -18,6 +26,9 @@ private:
     size_t find_crlf(const std::string& s, size_t pos = 0) const;
     size_t find_crlfcrlf(const std::string& s, size_t pos = 0) const;
     std::string trim(const std::string& str) const;
+    bool _Extract_Request_Data(vector <string> v_request);
+    bool _Check_Get_Method(ResponseBuilder & response);
+    bool _isHttpSupported ();
 
 
 public:
@@ -32,8 +43,9 @@ public:
     const std::string& getHttpVersion() const;
     const std::map<std::string, std::string>& getHeaders() const;
     const std::string& getBody() const;
+    bool ValidateDataForResponse(ResponseBuilder &response);
 
-
+    
 
 };
 
