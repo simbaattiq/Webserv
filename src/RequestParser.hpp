@@ -9,6 +9,7 @@ using namespace std;
 #include <vector>
 #include "ResponseBuilder.hpp"
 #include "../include/Server.h"
+#include <fstream>
 
 extern Server *srv;
 
@@ -28,7 +29,11 @@ private:
     std::string trim(const std::string& str) const;
     bool _Extract_Request_Data(vector <string> v_request);
     bool _Check_Get_Method(ResponseBuilder & response);
+    bool _Check_Post_Method(ResponseBuilder & response);
     bool _isHttpSupported ();
+    bool handleUploadData( int & statuscode, string &fullpath);
+    string GenerateUploadFile();
+    bool saveBodyToFile(const string filepath);
 
 
 public:

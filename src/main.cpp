@@ -58,10 +58,6 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 
             std::string httpResponse = responseBuilder.build();
             send(client_fd, httpResponse.c_str(), httpResponse.length(), 0);
-            std::cout << "Sent response to client " << client_fd << ":\n" << httpResponse << std::endl;
-
-           cout << httpResponse << endl;
-            
 
             // if (responseBuilder.Connection == responseBuilder.CLOSE)
             // {

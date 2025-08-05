@@ -101,7 +101,7 @@ bool RequestParser::_Extract_Request_Data(vector <string> v_request)
         }
     }
 
-    if (getMethod() != "Post")
+    if (getMethod() != "POST")
         return (true);
 
     if (endofheaders && i < v_request.size())
@@ -183,6 +183,14 @@ bool CanWeReadAFile(string s)
         return (false);
 }
 
+bool CanWeWriteFile(string s)
+{
+    if (access(s.c_str(), W_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
 
 bool RequestParser::_isHttpSupported ()
 {
@@ -215,10 +223,6 @@ bool isHeaderNameExist(string HeaderName, map <string, string> headers)
     return (true);
 }
 
-
-
-
-
 bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 {
 
@@ -238,6 +242,10 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             statuscode = 505;
         else if (!isHeaderNameExist("Host", _headers))
             statuscode = 400;
+    }
+    else if (_uri == "favicon.ico")
+    {
+        // statuscode = 404;
     }
     else
     {
@@ -264,6 +272,147 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
     return (true);
 }
 
+string RequestParser::GenerateUploadFile()
+{
+    string filename;
+
+    time_t now = time(0);
+    ostringstream oss;
+    oss << "upload_" << now;
+
+    string contenttype = _headers["Content-Type"];
+
+    if (contenttype.find("text/plain") != string::npos)
+        oss << ".txt";
+    else if (contenttype.find("text/html") != string::npos)
+        oss << ".html";
+    else if (contenttype.find("application/json") != string::npos)
+        oss << ".json";
+    else if (contenttype.find("image/jpeg") != string::npos)
+        oss << ".jpeg";
+    else if (contenttype.find("image/png") != string::npos)
+        oss << ".png";
+    else
+        oss << ".bin";
+    return (oss.str());
+}
+
+bool RequestParser::saveBodyToFile(const string filepath)
+{
+    ofstream file(filepath.c_str(), ios::binary);
+
+    if (!file.is_open())
+        return (false);
+
+
+    file.write (_body.c_str(), _body.size());
+    file.close();
+    return (true);
+}
+
+bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
+{
+    try
+    {
+
+        string filename = GenerateUploadFile();
+        fullpath  = srv->location_upload.root + "/" + filename;
+
+        if ((!saveBodyToFile(fullpath)))
+        {
+            cout << "Faild to save upoaded data" << endl;
+            statuscode = 500;
+            return (false);
+        }
+
+        cout << "Data saved to : " << fullpath << endl;
+        statuscode = 201;
+        return (true);
+
+
+    }
+    catch(const std::exception& e)
+    {
+        cout << "Upload processing error " <<  e.what() << endl;
+        statuscode = 500;
+        return (false);
+    }
+    
+}
+
+
+bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
+{
+
+    (void)response;
+    int statuscode = 200;
+    string fullpath = "";
+    
+
+    if (_uri == "/upload")
+    {
+        if (!isMethodAuthorised(_method, srv->location_upload.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location_upload.root))
+            statuscode = 404;
+        else if (!CanWeWriteFile(srv->location_upload.root))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+        else if (!isHeaderNameExist("Content-Length", _headers))
+            statuscode = 400;
+        else if (!isHeaderNameExist("Content-Type", _headers))
+            statuscode = 400;
+        else
+        {
+
+            string contentLengthStr = _headers["Content-Length"];
+            size_t expectedLength = strtoul(contentLengthStr.c_str(), NULL, 10);
+            if (_body.size() != expectedLength)
+            {
+                cout << "Content-Length mismatch: expected " << expectedLength 
+                     << ", got " << _body.size() << endl;
+                statuscode = 400;
+            }
+            else
+            {
+                handleUploadData(statuscode, fullpath);
+                
+            }
+        }
+    }
+    else
+    {
+        cout << "URL not found\n";
+        statuscode = 400;
+    }
+
+    string MessageStatus = StatusCodes::getStatusMessage(statuscode);
+    response.setStatus(statuscode, MessageStatus);
+    response.addHeader("Content-Type", "text/html");
+
+    if (statuscode == 201)
+    {
+        response.addHeader("Location",  "/uploads" + fullpath);
+        response.setBody("Upload successful");
+    }
+    else if (statuscode >= 400)
+    {
+        string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                statuscode, MessageStatus);
+        response.setBody(body);
+    }
+    else
+    {
+        response.setBody ("Request processed");
+    }
+
+    cout << "code status before seting the body : " << statuscode << endl;
+    return (true);
+}
+
 
 bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
 {
@@ -282,6 +431,7 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
     else if (_method == "POST")
     {
         response.Method = response.POST;
+        _Check_Post_Method(response);
     }
     else
     {
