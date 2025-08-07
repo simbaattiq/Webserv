@@ -473,7 +473,7 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
     vector <string > v_uri =prs. _split(_uri, '/');
 
     
-    if (v_uri.size() <= 0)
+    if (v_uri.size() <= 1)
         statuscode=400;
     
 
@@ -506,13 +506,13 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
         {
             statuscode = 500;
         }
-        // if (statuscode )
-        response.setBody("File Deleted Succes\n");
+        else
+            response.setBody("File Deleted Succes\n");
     }
-    else
-    {
-        response.setBody("Cannot Delete content\n");
-    }
+    // if (statuscode != 200)
+    // {
+    //     response.setBody("Cannot Delete content\n");
+    // }
 
     cout << "code status before seting the body : " << statuscode << endl;
     prs.~Parser();
