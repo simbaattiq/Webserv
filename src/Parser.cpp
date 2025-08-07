@@ -96,7 +96,7 @@ int _find_word( char * s, string word)
     return (0);
 }
 
-std::vector<std::string> _split(const std::string& str, char delimiter)
+std::vector<std::string> Parser::_split(const std::string& str, char delimiter)
  {
     std::vector<std::string> result;
     std::string temp;

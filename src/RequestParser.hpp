@@ -10,6 +10,8 @@ using namespace std;
 #include "ResponseBuilder.hpp"
 #include "../include/Server.h"
 #include <fstream>
+#include "../include/Parser.h"
+// #include <cstdio>
 
 extern Server *srv;
 
@@ -34,6 +36,9 @@ private:
     bool handleUploadData( int & statuscode, string &fullpath);
     string GenerateUploadFile();
     bool saveBodyToFile(const string filepath);
+    bool _Check_Delete_Method(ResponseBuilder & response);
+    bool _Delete_Content(vector <string > uri);
+    
 
 
 public:

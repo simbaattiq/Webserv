@@ -4,6 +4,7 @@
 #include <algorithm>
 #include "StatusCodes.hpp"
 
+
 RequestParser::RequestParser() {
     clear();
 }
@@ -413,6 +414,114 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
     return (true);
 }
 
+string AssembleWord(vector < string > v_uri, string wordtonotadd)
+{
+    string path = "";
+
+
+    for (size_t i=0; i < v_uri.size() ; i++)
+    {
+        if (v_uri[i] != wordtonotadd)
+        {
+             path += v_uri[i];
+
+             if ( i < v_uri.size() -1)
+                path += '/';
+        }
+           
+        
+    }
+    return (path);
+}
+
+bool RequestParser::_Delete_Content(vector < string > v_uri)
+{
+    try
+    {
+        string fullpath = AssembleWord(v_uri, "uploads");
+
+        if (remove((srv->location_upload.root + '/' + fullpath).c_str() )== 0)
+        {
+            cout << "File Deleted Succuss" << srv->location_upload.root + '/' + fullpath << endl;
+            return (true);
+        }
+        else
+        {
+            cout << "Failed to delete file:" << srv->location_upload.root + '/' + fullpath << endl;
+            return (false);
+        }
+    }
+    catch (exception &e)
+    {
+        cout << "error  catched  : " << e.what() << endl;
+        return (false);
+    }
+}
+
+
+
+bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
+{
+
+    (void)response;
+    int statuscode = 200;
+
+
+    cout << "****************uri  : "  <<   _uri << endl;
+
+    Parser prs ("");
+    vector <string > v_uri =prs. _split(_uri, '/');
+
+    
+    if (v_uri.size() <= 0)
+        statuscode=400;
+    
+
+    else if (v_uri[0] == "uploads")
+    {
+        if (!isMethodAuthorised(_method, srv->location_upload.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible("/var/www/" + _uri))
+            statuscode = 404;
+        else if (!CanWeWriteFile("/var/www/" + _uri))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+    }
+    else
+    {
+        cout << "URL not found\n";
+        statuscode = 400;
+    }
+
+    string MessageStatus = StatusCodes::getStatusMessage(statuscode);
+    response.setStatus(statuscode, MessageStatus);
+    response.addHeader("Content-Type", "text/html");
+
+    if (statuscode == 200)
+    {
+        if (!_Delete_Content(v_uri))
+        {
+            statuscode = 500;
+        }
+        // if (statuscode )
+        response.setBody("File Deleted Succes\n");
+    }
+    else
+    {
+        response.setBody("Cannot Delete content\n");
+    }
+
+    cout << "code status before seting the body : " << statuscode << endl;
+    prs.~Parser();
+    return (true);
+}
+
+
+
+
 
 bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
 {
@@ -427,6 +536,7 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
     else if (_method == "DELETE")
     {
         response.Method = response.DELETE;
+        _Check_Delete_Method(response);
     }
     else if (_method == "POST")
     {
