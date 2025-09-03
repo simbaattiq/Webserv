@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iostream>
 #include <algorithm>
+#include "StatusCodes.hpp"
+
 
 RequestParser::RequestParser() {
     clear();
@@ -43,79 +45,616 @@ std::string RequestParser::trim(const std::string& str) const
 }
 
 
-bool RequestParser::parse(const std::string& raw_request)
+
+int findindex( string s   , char  c)
 {
-    clear();
-
-    size_t first_crlf = find_crlf(raw_request);
-    if (first_crlf == std::string::npos)
+    for (size_t i = 0; i < s.length(); i++)
     {
-        return false;
+        if (s[i] == c)
+            return (i);
     }
+    return (-1);
+}
 
-    std::string request_line = raw_request.substr(0, first_crlf);
-    std::istringstream iss(request_line);
 
-    std::string method_str, uri_str, httpVersion_str;
+bool RequestParser::_Extract_Request_Data(vector <string> v_request)
+{
 
-    iss >> method_str >> uri_str >> httpVersion_str;
+    if (v_request.empty())
+        return (false);
 
-    _method = trim(method_str);
-    _uri = trim(uri_str);
-    _httpVersion = trim(httpVersion_str);
+    stringstream iss(v_request[0]);
+
+    iss >> _method >> _uri >> _httpVersion;
 
     if (_method.empty() || _uri.empty() || _httpVersion.empty())
     {
+        cerr << "Invalid request line!" << std::endl;
         return false;
     }
-
-    size_t header_start = first_crlf + 2; // skip first CRLF
-    size_t body_start = find_crlfcrlf(raw_request, header_start);
-
-    if (body_start == std::string::npos)
+    else
     {
-        // if no double CRLF found == no body or malformed request
-        body_start = raw_request.length(); // treat the rest as headers
+        cout << "Request line : \n";
+        cout << getMethod() << " " << getUri()  << " " << getHttpVersion() << endl;
     }
 
-
-    size_t headers_length = 0;
-    if (body_start > header_start) {
-        headers_length = body_start - header_start;
-    }
-
-    std::string headers_str = raw_request.substr(header_start, headers_length);
-    std::istringstream header_iss(headers_str);
-    std::string line;
-
-    while (std::getline(header_iss, line) && line != "\r")
+    size_t i = 1;
+    bool endofheaders = false;
+    for ( ;  i < v_request.size(); i++)
     {
-        if (line.length() < 2) 
-            continue;
+        string line = v_request[i];
 
-        // remove trailing '\r' if present (from \r\n)
-        if (line[line.length() - 1] == '\r')
+        if (line.empty())
         {
-            line = line.substr(0, line.length() - 1);
+            endofheaders = true;
+            i++;
+            break;
         }
 
-        size_t colon_pos = line.find(":");
-        if (colon_pos != std::string::npos)
-        {
-            std::string key = line.substr(0, colon_pos);
-            std::string value = line.substr(colon_pos + 1);
+        size_t pos = line.find(':');
 
-            _headers[trim(key)] = trim(value);
+        if (pos != string::npos)
+        {
+            string header_name = trim(line.substr(0, pos));
+            string header_value = trim (line.substr(pos + 1));
+
+            _headers[header_name] = header_value;
         }
     }
 
-    if (body_start != raw_request.length()) 
+    if (getMethod() != "POST")
+        return (true);
+
+    if (endofheaders && i < v_request.size())
     {
-        _body = raw_request.substr(body_start + 4); // skip double CRLF
+        for (; i < v_request.size(); i++)
+        {
+            if (!_body.empty())
+                _body += '\n';
+            _body += v_request[i];
+        }
+    }
+    else
+    {
+        cout << "Header not closed proprerly\n";
+        return (false);
+    }
+    return (true);
+}
+
+bool RequestParser::parse(const std::string& raw_request)
+{
+    clear();
+    vector<string> v_lines;
+    string line = raw_request;
+    
+    size_t tmp_pos = 0;
+    size_t pos = 0;
+    while ((pos = line.find("\r\n", tmp_pos)) != string::npos)
+    {
+        string temp = line.substr(tmp_pos, pos - tmp_pos);
+        v_lines.push_back(temp);
+
+        tmp_pos = pos + 2;
+
+        // check for end of headers (empty line)
+        if (tmp_pos < line.length() && line.substr(tmp_pos, 2) == "\r\n")
+        {
+            v_lines.push_back("");
+            tmp_pos += 2;
+
+            // Add remaining content as body
+            if (tmp_pos < line.length())
+            {
+                string rest = line.substr(tmp_pos);
+                v_lines.push_back(rest);
+            }
+            break;
+        }
+    }
+
+    if (tmp_pos < line.length() && pos == string::npos)
+    {
+        string rest = line.substr(tmp_pos);
+        if (!rest.empty())
+            v_lines.push_back(rest);
+    }
+
+    if (!_Extract_Request_Data(v_lines))
+        return false;
+
+    //// // /
+    if (_method == "POST" && _headers.find("Content-Type") != _headers.end() && 
+        _headers["Content-Type"].find("multipart/form-data") != std::string::npos)
+    {
+        // Parse multipart form data
+        if (!parseMultipartFormData(_headers["Content-Type"]))
+        {
+            cout << "Failed to parse multipart form data" << endl;
+            return false;
+        }
+        // std::cout << "==> \n" << _headers["Content-Type"] << "\n";
+    }
+    // std::cout << "[BODY]:\n" << _body << "\n";
+    
+    return true;
+}
+
+bool isFileAccessible(string s)
+{
+    if (access(s.c_str(), F_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
+bool CanWeReadAFile(string s)
+{
+    if (access(s.c_str(), R_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
+bool CanWeWriteFile(string s)
+{
+    if (access(s.c_str(), W_OK) == 0)
+        return (true);
+    else
+        return (false);
+}
+
+
+bool RequestParser::_isHttpSupported ()
+{
+    if (_httpVersion.empty())
+        return (false);
+
+    if (!(_httpVersion == "HTTP/1.1"))
+        return (false);
+    return (true);
+}
+
+bool isMethodAuthorised(string Method , vector <string> methods )
+{
+    for (size_t i = 0; i < methods.size(); i++)
+    {
+        if (methods[i] == Method)
+            return (true);
+    }
+    return (false);
+}
+
+
+bool isHeaderNameExist(string HeaderName, map <string, string> headers)
+{
+
+    if (headers.find(HeaderName) == headers.end() 
+        || headers[HeaderName].empty())
+        return (false);
+
+    return (true);
+}
+
+bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
+{
+    // false !
+
+    (void)response;
+    int statuscode = 200;
+    // chech auto index but is insecure; unsafe  to list 
+
+    if (_uri == "/")
+    {
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+    }
+    else if (_uri == "favicon.ico")
+    {
+        // statuscode = 404;
+    }
+    else
+    {
+        cout << "URL not found\n";
+        statuscode = 400;
+    }
+
+    string MessageStatus = StatusCodes::getStatusMessage(statuscode);
+    response.setStatus(statuscode, MessageStatus);
+    response.addHeader("Content-Type", "text/html");
+
+    if (statuscode == 200)
+    {
+        response.setBody(srv->location.index_content);
+    }
+    else
+    {
+        string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                statuscode, MessageStatus);
+        response.setBody(body);
+        // serve the error html;
+    }
+    
+    return (true); // !
+}
+
+string RequestParser::GenerateUploadFile()
+{
+    string filename;
+
+    time_t now = time(0);
+    ostringstream oss;
+    oss << "upload_" << now;
+
+    string contenttype = _headers["Content-Type"];
+
+    if (contenttype.find("text/plain") != string::npos)
+        oss << ".txt";
+    else if (contenttype.find("text/html") != string::npos)
+        oss << ".html";
+    else if (contenttype.find("application/json") != string::npos)
+        oss << ".json";
+    else if (contenttype.find("image/jpeg") != string::npos)
+        oss << ".jpeg";
+    else if (contenttype.find("image/png") != string::npos)
+        oss << ".png";
+    else
+        oss << ".bin";
+    return (oss.str());
+}
+
+bool RequestParser::saveBodyToFile(const string filepath)
+{
+    ofstream file(filepath.c_str(), ios::binary);
+
+    if (!file.is_open())
+        return (false);
+
+
+    file.write (_body.c_str(), _body.size());
+    file.close();
+    return (true);
+}
+
+bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
+{
+    try
+    {
+
+        string filename = GenerateUploadFile();
+        fullpath  = srv->location_upload.root + "/" + filename;
+
+        if ((!saveBodyToFile(fullpath)))
+        {
+            cout << "Faild to save uploaded data" << endl;
+            statuscode = 500;
+            return (false);
+        }
+
+        cout << "Data saved to : " << fullpath << endl;
+        statuscode = 201;
+        return (true);
+
+
+    }
+    catch(const std::exception& e)
+    {
+        cout << "Upload processing error " <<  e.what() << endl;
+        statuscode = 500;
+        return (false);
+    }
+    
+}
+
+
+// new updated method
+bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
+{
+    int statuscode = 400;
+    string fullpath = "";
+
+    if (_uri == "/upload")
+    {
+        if (!isMethodAuthorised(_method, srv->location_upload.methods))
+        {
+            statuscode = StatusCodes::METHOD_NOT_ALLOWED;
+            response.addHeader("Allow", "GET, POST");
+        }
+        else if (!isFileAccessible(srv->location_upload.root))
+        {
+            statuscode = StatusCodes::NOT_FOUND;
+        }
+        else if (!CanWeWriteFile(srv->location_upload.root))
+        {
+            statuscode = StatusCodes::FORBIDDEN;
+        }
+        else if (!_isHttpSupported())
+        {
+            statuscode = StatusCodes::HTTP_VERSION_NOT_SUPPORTED;
+        }
+        else if (!isHeaderNameExist("Host", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+        else if (!isHeaderNameExist("Content-Length", _headers))
+        {
+            statuscode = StatusCodes::LENGTH_REQUIRED;
+        }
+        else if (!isHeaderNameExist("Content-Type", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+
+        else
+        {
+            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str())); //// // /
+            
+            if (_body.size() != expectedLength)
+            {
+                statuscode = StatusCodes::BAD_REQUEST;
+            } 
+            else
+            {
+                //multipart form data request
+                if (_headers["Content-Type"].find("multipart/form-data") != std::string::npos)
+                {
+                    if (parseMultipartFormData(_headers["Content-Type"]))
+                    {
+                        // Save each uploaded file
+                        bool allFilesSaved = true;
+                        std::vector<std::string> savedPaths;
+                        
+                        for (size_t i = 0; i < _uploadedFiles.size(); i++)
+                        {
+                            if (!_uploadedFiles[i].fileName.empty())
+                            {
+                                std::string filePath = srv->location_upload.upload_store + "/" + _uploadedFiles[i].fileName;
+                                std::ofstream file(filePath.c_str(), std::ios::binary);
+                                
+                                if (file.is_open())
+                                {
+                                    file.write(_uploadedFiles[i].content.c_str(), _uploadedFiles[i].content.length());
+                                    file.close();
+                                    savedPaths.push_back(filePath);
+                                }
+                                else
+                                {
+                                    allFilesSaved = false;
+                                    break;
+                                }
+                            }
+                        }
+                        
+                        if (allFilesSaved)
+                        {
+                            statuscode = StatusCodes::CREATED;
+                            
+                            // Add the list of saved files to the response
+                            std::string responseBody = "<html><body><h1>Files uploaded successfully</h1><ul>";
+                            for (size_t i = 0; i < savedPaths.size(); ++i) //// // /
+                            {
+                                responseBody += "<li>" + savedPaths[i] + "</li>";
+                            }
+                            responseBody += "</ul></body></html>";
+                            
+                            response.setBody(responseBody);
+                            response.addHeader("Content-Type", "text/html");
+                        }
+                        else
+                        {
+                            statuscode = StatusCodes::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    else
+                    {
+                        statuscode = StatusCodes::BAD_REQUEST;
+                    }
+                }
+                else
+                {
+                    // regular POST data as before
+                    if (handleUploadData(statuscode, fullpath)) 
+                    {
+                        // Success
+                    }
+                }
+            }
+        }
+    }
+    else
+    {
+        statuscode = StatusCodes::NOT_FOUND;
+    }
+
+    if (statuscode == StatusCodes::CREATED)
+    {
+        response.setStatus(statuscode, StatusCodes::getStatusMessage(statuscode));
+        if (fullpath != "")
+            response.addHeader("Location", fullpath);
+    }
+    else if (statuscode >= 400)
+    {
+        std::string errorpage = srv->error.error.html_content;
+        response.setStatus(statuscode, StatusCodes::getStatusMessage(statuscode));
+        response.addHeader("Content-Type", "text/html");
+        response.setBody(response.Replace_html_error_message(errorpage, statuscode, StatusCodes::getStatusMessage(statuscode)));
+    }
+    else
+    {
+        response.setStatus(statuscode, StatusCodes::getStatusMessage(statuscode));
     }
 
     return true;
 }
+
+
+string AssembleWord(vector < string > v_uri, string wordtonotadd)
+{
+    string path = "";
+
+
+    for (size_t i=0; i < v_uri.size() ; i++)
+    {
+        if (v_uri[i] != wordtonotadd)
+        {
+             path += v_uri[i];
+
+             if ( i < v_uri.size() -1)
+                path += '/';
+        }
+           
+        
+    }
+    return (path);
+}
+
+bool RequestParser::_Delete_Content(vector < string > v_uri)
+{
+    try
+    {
+        string fullpath = AssembleWord(v_uri, "uploads");
+
+        if (remove((srv->location_upload.root + '/' + fullpath).c_str() )== 0)
+        {
+            cout << "File Deleted Succuss" << srv->location_upload.root + '/' + fullpath << endl;
+            return (true);
+        }
+        else
+        {
+            cout << "Failed to delete file:" << srv->location_upload.root + '/' + fullpath << endl;
+            return (false);
+        }
+    }
+    catch (exception &e)
+    {
+        cout << "error  catched  : " << e.what() << endl;
+        return (false);
+    }
+}
+
+
+
+bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
+{
+
+    (void)response;
+    int statuscode = 200;
+
+
+    cout << "****************uri  : "  <<   _uri << endl;
+
+    Parser prs ("");
+    vector <string > v_uri =prs. _split(_uri, '/');
+
+    
+    if (v_uri.size() <= 1)
+        statuscode=400;
+    
+
+    else if (v_uri[0] == "uploads")
+    {
+        if (!isMethodAuthorised(_method, srv->location_upload.methods ))
+            statuscode = 405;
+
+
+
+        /* we have an issue in this section */
+
+        // // else if (!isFileAccessible("/var/www/" + _uri))
+        // else if (!isFileAccessible("/var/www/" + _uri))
+        // {
+        //     cout << "**404** : _uri: " << _uri << '\n';
+        //     statuscode = 404;
+        // }
+        // else if (!CanWeWriteFile("/var/www/" + _uri))
+        //     statuscode = 403;
+
+
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+    }
+    else
+    {
+        cout << "URL not found\n";
+        // cout << "V_URL[0]: ==> " << v_uri[0] << "\n";  
+        statuscode = 400;
+    }
+
+    string MessageStatus = StatusCodes::getStatusMessage(statuscode);
+    response.setStatus(statuscode, MessageStatus);
+    response.addHeader("Content-Type", "text/html");
+
+    if (statuscode == 200)
+    {
+        if (!_Delete_Content(v_uri))
+        {
+            statuscode = 500;
+        }
+        else
+            response.setBody("File Deleted Successfully\n");
+    }
+    // if (statuscode != 200)
+    // {
+    //     response.setBody("Cannot Delete content\n");
+    // }
+
+    cout << "code status before setting the body : " << statuscode << endl;
+    prs.~Parser();
+    return (true);
+}
+
+
+
+
+
+bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
+{
+
+    if (_method == "GET")
+    {
+        response.Method = response.GET;
+        _Check_Get_Method(response);
+        
+    }
+
+    else if (_method == "DELETE")
+    {
+        response.Method = response.DELETE;
+        _Check_Delete_Method(response);
+    }
+    else if (_method == "POST")
+    {
+        response.Method = response.POST;
+        _Check_Post_Method(response);
+    }
+    else
+    {
+        cerr << "error in METHOD\n";
+        response.Method = response.ERROR;
+        return (false);
+    }
+
+    if (!_headers["Connection"].empty())
+    {
+        if (_headers["Connection"] == "close")
+            response.Connection = response.CLOSE;
+    }
+    return (true);
+}
+
+
+
+
 
 const std::string& RequestParser::getMethod() const { return _method; }
 
@@ -127,3 +666,102 @@ const std::map<std::string, std::string>& RequestParser::getHeaders() const { re
 
 const std::string& RequestParser::getBody() const { return _body; }
 
+///////////////////////
+
+bool RequestParser::parseMultipartFormData(const std::string& contentType)
+{
+    std::string boundary = extractBoundary(contentType);
+    if (boundary.empty())
+    {
+        std::cerr << "no boundry found\n";
+        return false;
+    }
+    
+    parseMultipartParts(boundary);
+    return !_uploadedFiles.empty();
+}
+
+std::string RequestParser::extractBoundary(const std::string& contentType)
+{
+    size_t pos = contentType.find("boundary=");
+    if (pos == std::string::npos)
+    {
+        return "";
+    }
+    
+    return contentType.substr(pos + 9);
+}
+
+void RequestParser::parseMultipartParts(const std::string& boundary)
+{
+    std::string delimiter = "--" + boundary;
+    size_t pos = _body.find(delimiter);
+    
+    while (pos != std::string::npos)
+    {
+        size_t nextPos = _body.find(delimiter, pos + delimiter.length());
+        if (nextPos == std::string::npos)
+        {
+            break;
+        }
+        
+        std::string part = _body.substr(pos + delimiter.length() + 2,
+                                      nextPos - (pos + delimiter.length() + 2));
+        
+        // Parse the part headers and content
+        size_t headerEnd = part.find("\r\n\r\n");
+        if (headerEnd != std::string::npos)
+        {
+            std::string headers = part.substr(0, headerEnd);
+            std::string content = part.substr(headerEnd + 4);
+            
+            size_t dispositionPos = headers.find("Content-Disposition:");
+
+            if (dispositionPos != std::string::npos)
+            {
+                size_t filenamePos = headers.find("filename=\"", dispositionPos);
+                size_t namePos = headers.find("name=\"", dispositionPos);
+                
+                UploadedFile file;
+                
+                if (namePos != std::string::npos)
+                {
+                    size_t nameEnd = headers.find("\"", namePos + 6);
+                    if (nameEnd != std::string::npos)
+                    {
+                        file.fieldName = headers.substr(namePos + 6, nameEnd - (namePos + 6));
+                    }
+                }
+                
+                // Extract filename if it exists
+                if (filenamePos != std::string::npos)
+                {
+                    size_t filenameEnd = headers.find("\"", filenamePos + 10);
+                    if (filenameEnd != std::string::npos)
+                    {
+                        file.fileName = headers.substr(filenamePos + 10, filenameEnd - (filenamePos + 10));
+                    }
+                }
+                
+                size_t contentTypePos = headers.find("Content-Type:");
+                if (contentTypePos != std::string::npos)
+                {
+                    size_t contentTypeEnd = headers.find("\r\n", contentTypePos);
+                    if (contentTypeEnd != std::string::npos)
+                    {
+                        file.contentType = trim(headers.substr(contentTypePos + 13, contentTypeEnd - (contentTypePos + 13)));
+                    }
+                }
+                
+                // If there's a filename, it's a file upload
+                if (!file.fileName.empty())
+                {
+                    file.content = content;
+                    _uploadedFiles.push_back(file);
+                }
+            }
+        }
+        
+        pos = nextPos;
+    }
+}

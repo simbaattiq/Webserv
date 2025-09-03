@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Browser Test</title>
+    <style>
+        body { font-family: Arial; margin: 40px; }
+        .test-box { border: 1px solid #ddd; padding: 20px; margin: 20px 0; }
+        img { max-width: 300px; }
+    </style>
+</head>
+<body>
+    <h1>Browser Compatibility Test</h1>
+    
+    <div class="test-box">
+        <h2>Image Test</h2>
+        <img src="/test_dir/test.jpg" alt="Test Image (will 404 if missing)">
+    </div>
+    
+    <div class="test-box">
+        <h2>Form Test</h2>
+        <form action="/upload" method="post" enctype="multipart/form-data">
+            <input type="file" name="uploaded_file"><br><br>
+            <input type="submit" value="Upload File">
+        </form>
+    </div>
+    
+    <div class="test-box">
+        <h2>Directory Test</h2>
+        <a href="/test_dir/">View Test Directory</a>
+    </div>
+</body>
+</html>

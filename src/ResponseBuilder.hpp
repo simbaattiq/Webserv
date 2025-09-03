@@ -1,10 +1,19 @@
-#ifndef RESPONSE_BUILDER_HPP
+# ifndef RESPONSE_BUILDER_HPP
 #define RESPONSE_BUILDER_HPP
 
 #include <string>
 #include <vector>
 #include <utility>
 #include <sstream>
+#include <string>
+#include <iostream>
+
+#include <cstdio>
+
+
+using namespace std;
+
+
 
 class ResponseBuilder
 {
@@ -13,7 +22,7 @@ private:
     std::string _statusMessage;
     std::vector<std::pair<std::string, std::string> > _headers;
     std::string _body;
-
+    
 
 public:
     ResponseBuilder();
@@ -27,6 +36,13 @@ public:
 
     std::string build() const;
     void clear();
+
+    enum enMethod {GET, POST, DELETE, ERROR};
+    enum enResponseConnection {CLOSE, KEEP_ALIVE};
+    enMethod Method;
+    enResponseConnection Connection;
+
+ std::string  Replace_html_error_message(string body, int statuscode, string statusMessage);
 
 };
 
