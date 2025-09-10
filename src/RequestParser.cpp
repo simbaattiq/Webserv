@@ -236,13 +236,36 @@ bool isHeaderNameExist(string HeaderName, map <string, string> headers)
     return (true);
 }
 
+std::vector<std::string> RequestParser::_split(const std::string& str, char delimiter)
+ {
+    std::vector<std::string> result;
+    std::string temp;
+    for (size_t i = 0; i < str.length(); ++i)
+    {
+        if (str[i] == delimiter){
+            if (!temp.empty())
+                result.push_back(temp);
+            temp.clear();
+        } else {
+            temp += str[i];
+        }
+    }
+    if (!temp.empty())
+        result.push_back(temp);
+    return result;
+}
+
 bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 {
-    // false !
+    string imagedata = "";
+    bool isimagerequested = false;
+
+
+    vector <string> v =  _split (_uri,'/' );
 
     (void)response;
     int statuscode = 200;
-    // chech auto index but is insecure; unsafe  to list 
+
 
     if (_uri == "/")
     {
@@ -256,10 +279,53 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             statuscode = 505;
         else if (!isHeaderNameExist("Host", _headers))
             statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (v[0] == "images")
+    {   
+        isimagerequested = true;
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+        
+        else
+        {
+            string path=srv->location_images.root+ '/';
+            if (v.size() == 1)
+                path += "defaultimg.jpeg";
+            else
+            {
+                for (size_t i = 1; i < v.size(); i++)
+                    path += v[i];
+            }
+
+            std::ifstream imagefile(path.c_str(), std::ios::binary);
+
+            if (imagefile.is_open())
+            {
+                std::ostringstream ss;
+                ss << imagefile.rdbuf();
+                imagedata = ss.str();
+                imagefile.close();
+            }
+            else
+            {
+                cout << "cannot open " << path << endl;
+                statuscode = 404;
+            }
+        }
     }
     else if (_uri == "favicon.ico")
     {
-        // statuscode = 404;
+        cout << "hello this is favicon.ico" << endl;
     }
     else
     {
@@ -269,21 +335,45 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 
     string MessageStatus = StatusCodes::getStatusMessage(statuscode);
     response.setStatus(statuscode, MessageStatus);
-    response.addHeader("Content-Type", "text/html");
+    
 
-    if (statuscode == 200)
+    if (isimagerequested)
     {
+        if (statuscode == 200)
+        {
+            std::string contentType = "application/octet-stream";
+            if (imagedata.find(".jpg") != std::string::npos || imagedata.find(".jpeg") != std::string::npos)
+                response.addHeader("Content-Type",  "image/jpeg");
+            else if (imagedata.find(".png") != std::string::npos)
+                response.addHeader("Content-Type" , "image/png");
+            else if (imagedata.find(".gif") != std::string::npos)
+                response.addHeader("Content-Type", "image/gif");
+            
+            response.setBody(imagedata);
+        }
+        else
+        {
+            response.addHeader("Content-Type", "text/html");
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                statuscode, MessageStatus);
+            response.setBody(body);
+        }
+    }
+
+    else if (statuscode == 200)
+    {
+        response.addHeader("Content-Type", "text/html");
         response.setBody(srv->location.index_content);
     }
+
     else
     {
         string body = response.Replace_html_error_message(srv->error.error.html_content, 
                                 statuscode, MessageStatus);
         response.setBody(body);
-        // serve the error html;
     }
     
-    return (true); // !
+    return (true);
 }
 
 string RequestParser::GenerateUploadFile()

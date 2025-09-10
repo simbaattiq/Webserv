@@ -26,6 +26,7 @@ class Parser
       bool IsLocationExtracted(string line, Server *srv);
       bool IsLocationUploadExtracted(string Line, Server *srv);
       bool IsLocationCGIExtracted(string Line, Server *srv);
+      bool IsLocationImgExtracted(string Line, Server *srv);
       string _string_ToUpper(string s);
      bool  _is_Valide_ipaddress(Server *srv);
      bool   _Validate_Ports(Server *srv, string s);
