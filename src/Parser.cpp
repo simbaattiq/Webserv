@@ -302,6 +302,42 @@ bool Parser::IsLocationCGIExtracted(string Line, Server *srv)
     return (true);
 }
 
+bool Parser::IsLocationImgExtracted(string Line, Server *srv)
+{
+    string tmp;
+    vector <string> v_location = _split(Line, ';');
+    vector <string> v_tmp;
+
+
+    for (size_t  i= 0; i < v_location.size(); i++)
+    {
+        if (v_location[i].find ("root") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() != 2)
+                return (false);
+            srv->location_images.root = v_tmp[1];
+        }
+        else if (v_location[i].find ("methods") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() <= 1)
+                return (false);
+            
+            for (size_t i = 1 ; i < v_tmp.size(); i++)
+            {
+               
+                srv->location_images.methods.push_back(v_tmp[i]);
+            }
+        }
+        else
+            return (false);
+    }
+    return (true);
+}
+
 
 
 int _find_char_position(std::string s, char c)
@@ -428,6 +464,7 @@ bool Parser::_ExtractData(Server *srv)
 
     string line = "";
     string tmp =  "";
+    // cout << "i extract data \n";
 
     for (size_t i = 0; i < _conf_line.size(); i++)
     {
@@ -620,6 +657,48 @@ bool Parser::_ExtractData(Server *srv)
             {
                 return (false);
             }
+        }
+
+        else if (line.find("location /images") != string::npos)
+        {
+
+
+            cout << "############\nlocation /images found-";
+
+            line  = line.substr(_find_word((char *)line.c_str(), "location /images") + 1, line.length());
+
+            int pos  = 0;
+            while ((pos = _find_char_position(line, '{')) == -1)
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            line  = line.substr(pos  + 1, line.length());
+
+            while ((pos = _find_char_position(line, '}')) == -1)
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            tmp = line.substr(pos, line.length());
+            line  = line.substr(0, pos);
+            _trim(line);
+
+            if (!_isLinesSeparated(line))
+                return (false);
+
+            if (!IsLocationImgExtracted(line, srv))
+                return (false);
         }
 
         else if (line.find("location /") != string::npos)

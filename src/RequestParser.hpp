@@ -67,7 +67,7 @@ public:
 
     bool parse(const std::string& raw_request);
     void clear();
-
+    std::vector<std::string> _split(const std::string& str, char delimiter);
     const std::string& getMethod() const;
     const std::string& getUri() const;
     const std::string& getHttpVersion() const;

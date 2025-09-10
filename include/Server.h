@@ -61,6 +61,15 @@ class Server
             vector <string> methods;
     };
 
+    class Location_Images
+    {
+        public :
+            string root;
+            bool autoindex;
+            vector <string> methods;
+            string default_img;
+    };
+
 
     class Cgi_Bin
     {
@@ -79,6 +88,7 @@ class Server
     Error     error;
     Location  location;
     Location_Upload location_upload;
+    Location_Upload location_images;
     size_t          max_body_size;
     Cgi_Bin cgi_bin;
     int     server_fd;
