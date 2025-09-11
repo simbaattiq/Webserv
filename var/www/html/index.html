@@ -28,5 +28,31 @@
         <h2>Directory Test</h2>
         <a href="/test_dir/">View Test Directory</a>
     </div>
+
+    <div class="test-box">
+        <h2>Delete Test</h2>
+        <form id="deleteForm">
+            <label for="deleteFile">File to delete (in uploads):</label>
+            <input type="text" id="deleteFile" name="deleteFile" placeholder="e.g. text01.txt">
+            <button type="submit" class="btn">Delete File</button>
+        </form>
+        <div id="deleteResult"></div>
+        <script>
+            document.getElementById('deleteForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var filename = document.getElementById('deleteFile').value;
+                fetch('/uploads/' + encodeURIComponent(filename), {
+                    method: 'DELETE'
+                })
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('deleteResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('deleteResult').innerText = 'Error: ' + error;
+                });
+            });
+        </script>
+    </div>
 </body>
 </html>

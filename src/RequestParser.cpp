@@ -614,12 +614,12 @@ bool RequestParser::_Delete_Content(vector < string > v_uri)
 
         if (remove((srv->location_upload.root + '/' + fullpath).c_str() )== 0)
         {
-            cout << "File Deleted Succuss" << srv->location_upload.root + '/' + fullpath << endl;
+            cout << "File Deleted Succuss " << srv->location_upload.root + '/' + fullpath << endl;
             return (true);
         }
         else
         {
-            cout << "Failed to delete file:" << srv->location_upload.root + '/' + fullpath << endl;
+            cout << "Failed to delete file: " << srv->location_upload.root + '/' + fullpath << endl;
             return (false);
         }
     }
@@ -698,7 +698,6 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
     //     response.setBody("Cannot Delete content\n");
     // }
 
-    cout << "code status before setting the body : " << statuscode << endl;
     prs.~Parser();
     return (true);
 }
