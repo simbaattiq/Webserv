@@ -1,8 +1,10 @@
 #include "../include/Parser.h"
+#include <dirent.h>
 
 
 Parser::Parser(string s) : _configfilepath(s)
 {
+    
 }
 
 bool Parser::_isFileOpend ()
@@ -79,7 +81,7 @@ void Parser::v_clear()
 {
     while (_conf_line.size( ) > 0)
     {
-        
+        _conf_line.pop_back();
     }
 }
 
@@ -663,8 +665,6 @@ bool Parser::_ExtractData(Server *srv)
         {
 
 
-            cout << "############\nlocation /images found-";
-
             line  = line.substr(_find_word((char *)line.c_str(), "location /images") + 1, line.length());
 
             int pos  = 0;
@@ -805,11 +805,59 @@ bool   Parser::_Validate_Ports(Server *srv, string s)
 }
 
 
+bool isdirectoryopened(string path)
+{
+    DIR *dir = opendir (path.c_str());
+
+    if (dir)
+    {
+        closedir (dir);
+        return (true);
+    }
+    return (false);
+}
+
+
 bool Parser::_ValidateData(Server *srv)
 {
-    cout << "hey validate  data to do .\n";
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    cout << "validate data:\n";
 
-    cout << "Just Reading:" << srv->location.index << endl;
+
+
+    if (srv->listening.ip_addr.empty() || srv->listening.Port==-1)
+    {
+        cerr << "cannot read ip adress and port \n";
+        return (false);
+    }
+
+
+
+     srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+
+    if (srv->error.error.html_content.empty())
+    {
+        cerr << "cannot read " <<srv->error.error.html_path << "\n";
+        return (false);
+    }
+
+    if (!isdirectoryopened("/../"  + srv->location.root))
+    {
+        cerr << "cannot open  default location folder\n";
+        return (false);
+    }
+
+    if (!isdirectoryopened( srv->location_upload.root))
+    {
+        cerr << "cannot open  upload folder\n";
+        return (false);
+    }
+        
+    if (!isdirectoryopened( srv->location_images.root))
+    {
+        cerr << "cannot open  images folder\n";
+        return (false);
+    }
 
     srv->location.index_content = _ReadData(srv->location.root + "/" + 
            srv->location.index );
@@ -820,16 +868,9 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
-     cout << "Just Reading:" << srv->error.error.html_path << endl;
-    
-    srv->error.error.html_content = _ReadData(srv->error.error.html_path);
 
-    if (srv->error.error.html_content.empty())
-    {
-        cerr << "cannot read " <<srv->error.error.html_path << "\n";
-        return (false);
-    }
-
+    cout << "still need validating cgi in parsing\n";
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
     return (true);
 }
 
@@ -842,6 +883,9 @@ Server *Parser::Parse()
         return (NULL);
 
     Server *srv  = new Server();
+
+    srv->listening.ip_addr = "";
+    srv->listening.Port=-1;
     
     if (!_ExtractData(srv))
     {
