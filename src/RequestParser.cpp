@@ -610,6 +610,8 @@ bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
 }
 
 
+
+
 // new updated method
 bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
 {
@@ -650,7 +652,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
 
         else
         {
-            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str())); //// // /
+            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str()));
             
             if (_body.size() != expectedLength)
             {
@@ -721,6 +723,98 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
                         // Success
                     }
                 }
+            }
+        }
+    }
+    else if (_uri.find("cgi-bin") != std::string::npos)
+    {
+        cout << "Les amis cgi bin by post just called .\n";
+
+        if (!isMethodAuthorised(_method, srv->cgi_bin.methods))
+        {
+            statuscode = StatusCodes::METHOD_NOT_ALLOWED;
+            response.addHeader("Allow", "GET, POST");
+        }
+        else if (!isFileAccessible(srv->cgi_bin.root))
+        {
+            statuscode = StatusCodes::NOT_FOUND;
+        }
+        else if (!_isHttpSupported())
+        {
+            statuscode = StatusCodes::HTTP_VERSION_NOT_SUPPORTED;
+        }
+        else if (!isHeaderNameExist("Host", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+        else if (!isHeaderNameExist("Content-Length", _headers))
+        {
+            statuscode = StatusCodes::LENGTH_REQUIRED;
+        }
+        else if (!isHeaderNameExist("Content-Type", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+        else
+        {
+
+            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str()));
+            
+            if (_body.size() != expectedLength)
+            {
+                statuscode = StatusCodes::BAD_REQUEST;
+            }
+            
+            else  if (_headers.find("Content-Type") != _headers.end())
+            {
+                string cgi_output;
+
+
+                // CHECK SCRIPT PATH IF AVAILAIBLE AND CHECK FOR MSG;
+
+                string scriptpath = _uri.substr(strlen("/cgi_bin/") , _uri.length());
+
+
+                string pathscript = srv->cgi_bin.root + "/" + scriptpath;
+                    // std::cout << " script path: " << pathscript << std::endl;
+
+                if (!_isFileOpend(pathscript))
+                {
+                    std::cout << "cannot open script: " << pathscript << std::endl;
+                    statuscode = 404;
+                }
+                else if (!_body.empty())
+                {
+                    vector <string> v_arg = _split(_body, '=');
+
+                    if (v_arg.size() == 2 && v_arg[0] == "msg")
+                    {
+
+                        if (execute_cgi(cgi_output, v_arg[1], scriptpath))
+                        {
+                            statuscode = 200;
+                            response.setBody(cgi_output);
+                            response.addHeader("Content-Type", "text/plain");
+                        }
+                        else
+                        {
+                            statuscode = StatusCodes::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    else
+                    {
+                        statuscode = StatusCodes::BAD_REQUEST;
+                    }
+                }
+                else
+                {
+                    statuscode = StatusCodes::BAD_REQUEST;
+                }
+            }
+            else
+            {
+                statuscode = StatusCodes::UNSUPPORTED_MEDIA_TYPE;
+
             }
         }
     }

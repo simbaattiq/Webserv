@@ -37,7 +37,11 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 {
     char buffer[8192];
     int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
-    
+
+
+    // cout << "buff*****\n";
+    // cout << buffer << endl;
+    // cout << "buff*****\n";
     if (bytes_read > 0)
     {
         if (clientBuffers.find(client_fd) == clientBuffers.end())

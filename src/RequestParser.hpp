@@ -43,6 +43,7 @@ private:
     bool saveBodyToFile(const string filepath);
     bool _Check_Delete_Method(ResponseBuilder & response);
     bool _Delete_Content(vector <string > uri);
+    bool execute_cgi_post(string cgi_output);
 
 
     // added
