@@ -56,6 +56,8 @@ bool Parser::_ReadData()
 
 string Parser::_ReadData(string filetoread)
 {
+    if (filetoread.empty())
+        return ("empty filename" + filetoread);
 
     fstream file (filetoread.c_str());
         
@@ -841,7 +843,7 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
-    if (!isdirectoryopened("/../"  + srv->location.root))
+    if (!isdirectoryopened( srv->location.root))
     {
         cerr << "cannot open  default location folder\n";
         return (false);
@@ -868,8 +870,19 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
+    string htmlpath =  srv->location.root + "/cgi_answer.html";
+    srv->cgi_bin.htmlcontent = _ReadData  (htmlpath);
+
+
+    if (srv->cgi_bin.htmlcontent.empty())
+    {
+        cerr << "cannot read " << srv->location.root + "/cgi_answer.html" << "\n";
+        return (false);
+    }
+
 
     cout << "still need validating cgi in parsing\n";
+    cout << "still need validation for python || cgi_pass existence\n";
     cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
     return (true);
 }
@@ -886,6 +899,7 @@ Server *Parser::Parse()
 
     srv->listening.ip_addr = "";
     srv->listening.Port=-1;
+    srv->cgi_bin.htmlcontent = "";
     
     if (!_ExtractData(srv))
     {

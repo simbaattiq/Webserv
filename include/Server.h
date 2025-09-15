@@ -77,6 +77,7 @@ class Server
             string root;
             string cgi_pass;
             vector <string> methods;
+            string htmlcontent;
     };
 
 

@@ -255,10 +255,96 @@ std::vector<std::string> RequestParser::_split(const std::string& str, char deli
     return result;
 }
 
+
+bool _isFileOpend (string filename)
+{
+    
+    ifstream File (filename.c_str());
+
+    if (!File.is_open())
+    {
+        std::cerr << "Failed to open file : " 
+            << filename << "\n";
+        return (false);
+    }
+
+    return (true);
+}
+
+
+bool execute_cgi(string  & response, string arg, string path)
+{
+    pid_t pid  ;
+    int fd[2];
+    int status = 200;
+    int stdin = dup (  STDIN_FILENO);
+    int stdout = dup (  STDOUT_FILENO);
+
+    path = srv->cgi_bin.root + '/' + path;
+
+
+    try
+    {
+
+        if (pipe(fd) == -1)
+        {
+            status = 500; // internal;
+            return (false);
+        }
+
+       pid  = fork();
+       if (pid == 0)
+       {
+            cout << "i will execute \n";
+            close (fd[0]);
+            dup2 (fd[1], STDOUT_FILENO);
+            close (fd[1]);
+            char *argv[] = { (char*)srv->cgi_bin.cgi_pass.c_str(), (char*)path.c_str(), (char*)arg.c_str(),  (char*)NULL };
+            char *envp[] = { NULL };
+            execve((char*)srv->cgi_bin.cgi_pass.c_str(), argv, envp);
+            perror("execve");
+            exit(1);
+       }
+       else if (pid > 0)
+       {
+            close (fd[1]);
+            ssize_t n;
+            char buffer[4096];
+            response.clear();
+
+            while ((n = read(fd[0], buffer, sizeof(buffer))) > 0)
+            {
+                response.append(buffer, n);
+            }
+
+            close (fd[0]);
+            int status;
+            waitpid(pid, &status, 0) ;
+
+            return (true);
+       }
+       else
+       {
+            cout << "fork failed\n";
+            return (false);
+       }
+    }
+    catch (exception &e)
+    {
+        cout << e.what() << endl;
+        return (false);
+    }
+    (void)status;
+    return (true);
+}
+
+
 bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 {
     string imagedata = "";
     bool isimagerequested = false;
+    bool iscgi              =  false;
+    string output="";
 
 
     vector <string> v =  _split (_uri,'/' );
@@ -323,6 +409,73 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             }
         }
     }
+    else if (_uri.find("cgi-bin") != std::string::npos)
+    {
+
+         if (!isMethodAuthorised(_method, srv->cgi_bin.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->cgi_bin.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        else
+        {
+
+        
+                iscgi = true;
+
+                string scriptpath = _uri.substr(strlen("/cgi-bin/"));
+                size_t querypos = scriptpath.find('?');
+                string arg = "";
+
+                if (querypos != string::npos)
+                {
+                    scriptpath = scriptpath.substr(0, querypos);
+                }
+
+            
+                string pathscript = srv->cgi_bin.root + "/" + scriptpath;
+                if (!_isFileOpend(pathscript))
+                {
+                    std::cout << "cannot open script: " << pathscript << std::endl;
+                    statuscode = 404;
+                }
+                else
+                {
+                    size_t pos = _uri.find('?');
+                    string arg = "";
+                
+                    if (pos != string::npos)
+                    {
+                        arg = _uri.substr(pos + 1, _uri.length());
+                    }
+                
+                    vector <string> v_arg = _split (arg, '=');
+                
+                    if (v_arg.size() != 2)
+                    {
+                        statuscode = 400;
+                    }
+                    else
+                    {
+                        if (execute_cgi(output, v_arg[1], scriptpath))
+                        {
+                            cout << "execution pass\n";
+                        }
+                        else
+                        {
+                            cout << "cgi error ";
+                            statuscode = 400;
+                        }
+                    }
+                }
+            }
+    }
     else if (_uri == "favicon.ico")
     {
         cout << "hello this is favicon.ico" << endl;
@@ -363,7 +516,19 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
     else if (statuscode == 200)
     {
         response.addHeader("Content-Type", "text/html");
-        response.setBody(srv->location.index_content);
+        if (iscgi)
+        {
+            iscgi =false;
+            string body = response.Replace_html_cgi_message(srv->cgi_bin.htmlcontent, output );
+            response.setBody(body);
+
+        }
+        else
+        {
+            response.addHeader("Content-Type", "text/html");
+            response.setBody(srv->location.index_content);
+        }
+        
     }
 
     else
@@ -715,7 +880,6 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
         _Check_Get_Method(response);
         
     }
-
     else if (_method == "DELETE")
     {
         response.Method = response.DELETE;

@@ -54,5 +54,49 @@
             });
         </script>
     </div>
+
+     <div class="test-box">
+        <h2>GET/POST CGI Test</h2>
+        <form id="getForm" action="/cgi-bin/test_cgi.py" method="get">
+            <input type="text" name="msg" placeholder="Message for GET">
+            <button type="submit">Send GET</button>
+        </form>
+        <form id="postForm" action="/cgi-bin/test_cgi.py" method="post">
+            <input type="text" name="msg" placeholder="Message for POST">
+            <button type="submit">Send POST</button>
+        </form>
+        <div id="cgiResult"></div>
+        <script>
+            // AJAX for POST form to show result without reload
+            document.getElementById('postForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('cgiResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('cgiResult').innerText = 'Error: ' + error;
+                });
+            });
+            // AJAX for GET form to show result without reload
+            document.getElementById('getForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var params = new URLSearchParams(new FormData(this)).toString();
+                fetch(this.action + '?' + params)
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('cgiResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('cgiResult').innerText = 'Error: ' + error;
+                });
+            });
+        </script>
+    </div>
 </body>
 </html>

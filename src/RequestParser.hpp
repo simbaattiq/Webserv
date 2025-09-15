@@ -10,6 +10,7 @@
 #include "../include/Server.h"
 #include <fstream>
 #include "../include/Parser.h"
+#include <sys/wait.h>
 // #include <cstdio>
 
 

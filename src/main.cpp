@@ -77,6 +77,10 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                 isComplete = true;
             }
         }
+
+        // std::cout << "((((((((((((((()))))))))))))))\n";
+        // std::cout << clientBuffers[client_fd] << std::endl;
+        // std::cout << "((((((((((((((()))))))))))))))\n";
         
         if (isComplete || contentLength == 0)
         {
