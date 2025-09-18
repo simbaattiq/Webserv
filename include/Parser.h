@@ -28,8 +28,8 @@ class Parser
       bool IsLocationCGIExtracted(string Line, Server *srv);
       bool IsLocationImgExtracted(string Line, Server *srv);
       string _string_ToUpper(string s);
-     bool  _is_Valide_ipaddress(Server *srv);
-     bool   _Validate_Ports(Server *srv, string s);
+     bool  _is_Valide_ipaddress(string ip);
+     bool   _Validate_Ports( string s);
      bool _isserver_closed(size_t startindex, string &tmp);
      
 
