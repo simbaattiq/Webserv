@@ -82,7 +82,7 @@ bool RequestParser::_Extract_Request_Data(vector <string> v_request)
     bool endofheaders = false;
     for ( ;  i < v_request.size(); i++)
     {
-        string line = v_request[i];
+        std::string line = v_request[i];
 
         if (line.empty())
         {
@@ -236,13 +236,122 @@ bool isHeaderNameExist(string HeaderName, map <string, string> headers)
     return (true);
 }
 
+std::vector<std::string> RequestParser::_split(const std::string& str, char delimiter)
+ {
+    std::vector<std::string> result;
+    std::string temp;
+    for (size_t i = 0; i < str.length(); ++i)
+    {
+        if (str[i] == delimiter){
+            if (!temp.empty())
+                result.push_back(temp);
+            temp.clear();
+        } else {
+            temp += str[i];
+        }
+    }
+    if (!temp.empty())
+        result.push_back(temp);
+    return result;
+}
+
+
+bool _isFileOpend (string filename)
+{
+    
+    ifstream File (filename.c_str());
+
+    if (!File.is_open())
+    {
+        std::cerr << "Failed to open file : " 
+            << filename << "\n";
+        return (false);
+    }
+
+    return (true);
+}
+
+
+bool execute_cgi(string  & response, string arg, string path)
+{
+    pid_t pid  ;
+    int fd[2];
+    int status = 200;
+    int stdin = dup (  STDIN_FILENO);
+    int stdout = dup (  STDOUT_FILENO);
+
+    path = srv->cgi_bin.root + '/' + path;
+
+
+    try
+    {
+
+        if (pipe(fd) == -1)
+        {
+            status = 500; // internal;
+            return (false);
+        }
+
+       pid  = fork();
+       if (pid == 0)
+       {
+            cout << "i will execute \n";
+            close (fd[0]);
+            dup2 (fd[1], STDOUT_FILENO);
+            close (fd[1]);
+            char *argv[] = { (char*)srv->cgi_bin.cgi_pass.c_str(), (char*)path.c_str(), (char*)arg.c_str(),  (char*)NULL };
+            char *envp[] = { NULL };
+            execve((char*)srv->cgi_bin.cgi_pass.c_str(), argv, envp);
+            perror("execve");
+            exit(1);
+       }
+       else if (pid > 0)
+       {
+            close (fd[1]);
+            ssize_t n;
+            char buffer[4096];
+            response.clear();
+
+            while ((n = read(fd[0], buffer, sizeof(buffer))) > 0)
+            {
+                response.append(buffer, n);
+            }
+
+            close (fd[0]);
+            int status;
+            waitpid(pid, &status, 0) ;
+
+            return (true);
+       }
+       else
+       {
+            cout << "fork failed\n";
+            return (false);
+       }
+    }
+    catch (exception &e)
+    {
+        cout << e.what() << endl;
+        return (false);
+    }
+    (void)status;
+    return (true);
+}
+
+
 bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 {
-    // false !
+    string imagedata = "";
+    bool isimagerequested = false;
+    bool iscgi              =  false;
+    string output="";
+
+
+    vector <string> v =  _split (_uri,'/' );
 
     (void)response;
     int statuscode = 200;
-    // chech auto index but is insecure; unsafe  to list 
+
 
     if (_uri == "/")
     {
@@ -256,10 +365,120 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             statuscode = 505;
         else if (!isHeaderNameExist("Host", _headers))
             statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (v[0] == "images")
+    {   
+        isimagerequested = true;
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+        
+        else
+        {
+            string path=srv->location_images.root+ '/';
+            if (v.size() == 1)
+                path += "defaultimg.jpeg";
+            else
+            {
+                for (size_t i = 1; i < v.size(); i++)
+                    path += v[i];
+            }
+
+            std::ifstream imagefile(path.c_str(), std::ios::binary);
+
+            if (imagefile.is_open())
+            {
+                std::ostringstream ss;
+                ss << imagefile.rdbuf();
+                imagedata = ss.str();
+                imagefile.close();
+            }
+            else
+            {
+                cout << "cannot open " << path << endl;
+                statuscode = 404;
+            }
+        }
+    }
+    else if (_uri.find("cgi-bin") != std::string::npos)
+    {
+
+         if (!isMethodAuthorised(_method, srv->cgi_bin.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->cgi_bin.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        else
+        {
+
+        
+                iscgi = true;
+
+                string scriptpath = _uri.substr(strlen("/cgi-bin/"));
+                size_t querypos = scriptpath.find('?');
+                string arg = "";
+
+                if (querypos != string::npos)
+                {
+                    scriptpath = scriptpath.substr(0, querypos);
+                }
+
+            
+                string pathscript = srv->cgi_bin.root + "/" + scriptpath;
+                if (!_isFileOpend(pathscript))
+                {
+                    std::cout << "cannot open script: " << pathscript << std::endl;
+                    statuscode = 404;
+                }
+                else
+                {
+                    size_t pos = _uri.find('?');
+                    string arg = "";
+                
+                    if (pos != string::npos)
+                    {
+                        arg = _uri.substr(pos + 1, _uri.length());
+                    }
+                
+                    vector <string> v_arg = _split (arg, '=');
+                
+                    if (v_arg.size() != 2)
+                    {
+                        statuscode = 400;
+                    }
+                    else
+                    {
+                        if (execute_cgi(output, v_arg[1], scriptpath))
+                        {
+                            cout << "execution pass\n";
+                        }
+                        else
+                        {
+                            cout << "cgi error ";
+                            statuscode = 400;
+                        }
+                    }
+                }
+            }
     }
     else if (_uri == "favicon.ico")
     {
-        // statuscode = 404;
+        cout << "hello this is favicon.ico" << endl;
     }
     else
     {
@@ -269,21 +488,57 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 
     string MessageStatus = StatusCodes::getStatusMessage(statuscode);
     response.setStatus(statuscode, MessageStatus);
-    response.addHeader("Content-Type", "text/html");
+    
 
-    if (statuscode == 200)
+    if (isimagerequested)
     {
-        response.setBody(srv->location.index_content);
+        if (statuscode == 200)
+        {
+            std::string contentType = "application/octet-stream";
+            if (imagedata.find(".jpg") != std::string::npos || imagedata.find(".jpeg") != std::string::npos)
+                response.addHeader("Content-Type",  "image/jpeg");
+            else if (imagedata.find(".png") != std::string::npos)
+                response.addHeader("Content-Type" , "image/png");
+            else if (imagedata.find(".gif") != std::string::npos)
+                response.addHeader("Content-Type", "image/gif");
+            
+            response.setBody(imagedata);
+        }
+        else
+        {
+            response.addHeader("Content-Type", "text/html");
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                statuscode, MessageStatus);
+            response.setBody(body);
+        }
     }
+
+    else if (statuscode == 200)
+    {
+        response.addHeader("Content-Type", "text/html");
+        if (iscgi)
+        {
+            iscgi =false;
+            string body = response.Replace_html_cgi_message(srv->cgi_bin.htmlcontent, output );
+            response.setBody(body);
+
+        }
+        else
+        {
+            response.addHeader("Content-Type", "text/html");
+            response.setBody(srv->location.index_content);
+        }
+        
+    }
+
     else
     {
         string body = response.Replace_html_error_message(srv->error.error.html_content, 
                                 statuscode, MessageStatus);
         response.setBody(body);
-        // serve the error html;
     }
     
-    return (true); // !
+    return (true);
 }
 
 string RequestParser::GenerateUploadFile()
@@ -355,6 +610,8 @@ bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
 }
 
 
+
+
 // new updated method
 bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
 {
@@ -395,7 +652,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
 
         else
         {
-            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str())); //// // /
+            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str()));
             
             if (_body.size() != expectedLength)
             {
@@ -469,6 +726,98 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
             }
         }
     }
+    else if (_uri.find("cgi-bin") != std::string::npos)
+    {
+        cout << "Les amis cgi bin by post just called .\n";
+
+        if (!isMethodAuthorised(_method, srv->cgi_bin.methods))
+        {
+            statuscode = StatusCodes::METHOD_NOT_ALLOWED;
+            response.addHeader("Allow", "GET, POST");
+        }
+        else if (!isFileAccessible(srv->cgi_bin.root))
+        {
+            statuscode = StatusCodes::NOT_FOUND;
+        }
+        else if (!_isHttpSupported())
+        {
+            statuscode = StatusCodes::HTTP_VERSION_NOT_SUPPORTED;
+        }
+        else if (!isHeaderNameExist("Host", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+        else if (!isHeaderNameExist("Content-Length", _headers))
+        {
+            statuscode = StatusCodes::LENGTH_REQUIRED;
+        }
+        else if (!isHeaderNameExist("Content-Type", _headers))
+        {
+            statuscode = StatusCodes::BAD_REQUEST;
+        }
+        else
+        {
+
+            size_t expectedLength = static_cast<size_t>(atoi(_headers["Content-Length"].c_str()));
+            
+            if (_body.size() != expectedLength)
+            {
+                statuscode = StatusCodes::BAD_REQUEST;
+            }
+            
+            else  if (_headers.find("Content-Type") != _headers.end())
+            {
+                string cgi_output;
+
+
+                // CHECK SCRIPT PATH IF AVAILAIBLE AND CHECK FOR MSG;
+
+                string scriptpath = _uri.substr(strlen("/cgi_bin/") , _uri.length());
+
+
+                string pathscript = srv->cgi_bin.root + "/" + scriptpath;
+                    // std::cout << " script path: " << pathscript << std::endl;
+
+                if (!_isFileOpend(pathscript))
+                {
+                    std::cout << "cannot open script: " << pathscript << std::endl;
+                    statuscode = 404;
+                }
+                else if (!_body.empty())
+                {
+                    vector <string> v_arg = _split(_body, '=');
+
+                    if (v_arg.size() == 2 && v_arg[0] == "msg")
+                    {
+
+                        if (execute_cgi(cgi_output, v_arg[1], scriptpath))
+                        {
+                            statuscode = 200;
+                            response.setBody(cgi_output);
+                            response.addHeader("Content-Type", "text/plain");
+                        }
+                        else
+                        {
+                            statuscode = StatusCodes::INTERNAL_SERVER_ERROR;
+                        }
+                    }
+                    else
+                    {
+                        statuscode = StatusCodes::BAD_REQUEST;
+                    }
+                }
+                else
+                {
+                    statuscode = StatusCodes::BAD_REQUEST;
+                }
+            }
+            else
+            {
+                statuscode = StatusCodes::UNSUPPORTED_MEDIA_TYPE;
+
+            }
+        }
+    }
     else
     {
         statuscode = StatusCodes::NOT_FOUND;
@@ -524,12 +873,12 @@ bool RequestParser::_Delete_Content(vector < string > v_uri)
 
         if (remove((srv->location_upload.root + '/' + fullpath).c_str() )== 0)
         {
-            cout << "File Deleted Succuss" << srv->location_upload.root + '/' + fullpath << endl;
+            cout << "File Deleted Succuss " << srv->location_upload.root + '/' + fullpath << endl;
             return (true);
         }
         else
         {
-            cout << "Failed to delete file:" << srv->location_upload.root + '/' + fullpath << endl;
+            cout << "Failed to delete file: " << srv->location_upload.root + '/' + fullpath << endl;
             return (false);
         }
     }
@@ -608,7 +957,6 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
     //     response.setBody("Cannot Delete content\n");
     // }
 
-    cout << "code status before setting the body : " << statuscode << endl;
     prs.~Parser();
     return (true);
 }
@@ -626,7 +974,6 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
         _Check_Get_Method(response);
         
     }
-
     else if (_method == "DELETE")
     {
         response.Method = response.DELETE;

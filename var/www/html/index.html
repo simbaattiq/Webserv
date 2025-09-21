@@ -13,7 +13,7 @@
     
     <div class="test-box">
         <h2>Image Test</h2>
-        <img src="/test_dir/test.jpg" alt="Test Image (will 404 if missing)">
+        <img src="/images" alt="Test Image (will 404 if missing)">
     </div>
     
     <div class="test-box">
@@ -27,6 +27,76 @@
     <div class="test-box">
         <h2>Directory Test</h2>
         <a href="/test_dir/">View Test Directory</a>
+    </div>
+
+    <div class="test-box">
+        <h2>Delete Test</h2>
+        <form id="deleteForm">
+            <label for="deleteFile">File to delete (in uploads):</label>
+            <input type="text" id="deleteFile" name="deleteFile" placeholder="e.g. text01.txt">
+            <button type="submit" class="btn">Delete File</button>
+        </form>
+        <div id="deleteResult"></div>
+        <script>
+            document.getElementById('deleteForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var filename = document.getElementById('deleteFile').value;
+                fetch('/uploads/' + encodeURIComponent(filename), {
+                    method: 'DELETE'
+                })
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('deleteResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('deleteResult').innerText = 'Error: ' + error;
+                });
+            });
+        </script>
+    </div>
+
+     <div class="test-box">
+        <h2>GET/POST CGI Test</h2>
+        <form id="getForm" action="/cgi-bin/test_cgi.py" method="get">
+            <input type="text" name="msg" placeholder="Message for GET">
+            <button type="submit">Send GET</button>
+        </form>
+        <form id="postForm" action="/cgi-bin/test_cgi.py" method="post">
+            <input type="text" name="msg" placeholder="Message for POST">
+            <button type="submit">Send POST</button>
+        </form>
+        <div id="cgiResult"></div>
+        <script>
+            // AJAX for POST form to show result without reload
+            document.getElementById('postForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var formData = new FormData(this);
+                fetch(this.action, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('cgiResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('cgiResult').innerText = 'Error: ' + error;
+                });
+            });
+            // AJAX for GET form to show result without reload
+            document.getElementById('getForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                var params = new URLSearchParams(new FormData(this)).toString();
+                fetch(this.action + '?' + params)
+                .then(response => response.text())
+                .then(data => {
+                    document.getElementById('cgiResult').innerText = data;
+                })
+                .catch(error => {
+                    document.getElementById('cgiResult').innerText = 'Error: ' + error;
+                });
+            });
+        </script>
     </div>
 </body>
 </html>

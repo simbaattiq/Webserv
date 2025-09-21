@@ -10,6 +10,7 @@
 #include "../include/Server.h"
 #include <fstream>
 #include "../include/Parser.h"
+#include <sys/wait.h>
 // #include <cstdio>
 
 
@@ -42,6 +43,7 @@ private:
     bool saveBodyToFile(const string filepath);
     bool _Check_Delete_Method(ResponseBuilder & response);
     bool _Delete_Content(vector <string > uri);
+    bool execute_cgi_post(string cgi_output);
 
 
     // added
@@ -67,7 +69,7 @@ public:
 
     bool parse(const std::string& raw_request);
     void clear();
-
+    std::vector<std::string> _split(const std::string& str, char delimiter);
     const std::string& getMethod() const;
     const std::string& getUri() const;
     const std::string& getHttpVersion() const;
