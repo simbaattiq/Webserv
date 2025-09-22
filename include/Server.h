@@ -26,13 +26,13 @@ class Server
            string html_content;
         };
 
-    private :
-    class Listening
-    {
-        public : 
-            string ip_addr;
-            int   Port;
-    }; 
+    public :
+        class Listening
+        {
+            public : 
+                string ip_addr;
+                int   Port;
+        }; 
 
     class Error
     {
@@ -85,7 +85,8 @@ class Server
 
 
     Server();
-    Listening listening;
+    Listening listening; // will be deleted;
+    vector <Listening > v_listening; // new one;
     Error     error;
     Location  location;
     Location_Upload location_upload;

@@ -82,7 +82,7 @@ bool RequestParser::_Extract_Request_Data(vector <string> v_request)
     bool endofheaders = false;
     for ( ;  i < v_request.size(); i++)
     {
-        std::string line = v_request[i];
+        string line = v_request[i];
 
         if (line.empty())
         {
@@ -277,8 +277,8 @@ bool execute_cgi(string  & response, string arg, string path)
     pid_t pid  ;
     int fd[2];
     int status = 200;
-    int stdin = dup (  STDIN_FILENO);
-    int stdout = dup (  STDOUT_FILENO);
+    // int stdin = dup (  STDIN_FILENO);
+    // int stdout = dup (  STDOUT_FILENO);
 
     path = srv->cgi_bin.root + '/' + path;
 

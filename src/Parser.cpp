@@ -519,13 +519,24 @@ bool Parser::_ExtractData(Server *srv)
             listen[0] = _trim(listen[0]);
             listen[1] = _trim(listen[1]);
 
-            srv->listening.ip_addr = listen[0];
+            srv->listening.ip_addr = listen[0]; // to be deleted;
+            srv->listening.Port = atoi (listen[1].c_str()); // to be deleted;
         
-            if (!_is_Valide_ipaddress(srv))
+            if (!_is_Valide_ipaddress(listen[0]))
                 return (false);
 
-            if (!_Validate_Ports(srv, listen[1]) )
+            if (!_Validate_Ports(listen[1]) )
                 return (false);
+
+            Server::Listening l;
+
+            l.ip_addr = listen[0];
+
+            l.Port  = atoi (listen[1].c_str());
+            srv->v_listening.push_back (l);
+
+            // to be deleted;
+
         }
         
         
@@ -762,16 +773,16 @@ bool Parser::_ExtractData(Server *srv)
     return (true);
 }
 
-bool Parser::_is_Valide_ipaddress(Server *srv)
+bool Parser::_is_Valide_ipaddress(string ip)
 {
-    if (srv->listening.ip_addr.empty())
+    if (ip.empty())
     {
         return (false);
     }
 
 
 
-    vector <string > v_ipaddress = _split(srv->listening.ip_addr, '.');
+    vector <string > v_ipaddress = _split(ip, '.');
 
     if (v_ipaddress.size() != 4)
         return (false);
@@ -793,15 +804,15 @@ bool Parser::_is_Valide_ipaddress(Server *srv)
     return (true);
 }
 
-bool   Parser::_Validate_Ports(Server *srv, string s)
+bool   Parser::_Validate_Ports(string s)
 {
     if (!isvalidnumber(s))
         return (false);
 
 
-    srv->listening.Port  = atoi (s.c_str());
+    int num  = atoi (s.c_str());
 
-    if (srv->listening.Port > 65535 || srv->listening.Port < 0)
+    if (num > 65535 || num < 0)
         return (false);
     return (true);
 }

@@ -25,6 +25,8 @@ public:
     int pollEvents(int timeout_ms);
     const std::vector<pollfd>& getPollFds() const;
     void modifyFdEvents(int fd, short events);
+
+
 };
 
 #endif
