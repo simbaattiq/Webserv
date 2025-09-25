@@ -8,6 +8,7 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 
 
 #include <cerrno>
@@ -28,6 +29,7 @@ public:
 
     void create();
     void bind(int port);
+    void bind(int port, const std::string& ip_address);
     void listen(int backlog);
     int accept();
 

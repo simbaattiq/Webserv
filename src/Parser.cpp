@@ -1,8 +1,10 @@
 #include "../include/Parser.h"
+#include <dirent.h>
 
 
 Parser::Parser(string s) : _configfilepath(s)
 {
+    
 }
 
 bool Parser::_isFileOpend ()
@@ -54,6 +56,8 @@ bool Parser::_ReadData()
 
 string Parser::_ReadData(string filetoread)
 {
+    if (filetoread.empty())
+        return ("empty filename" + filetoread);
 
     fstream file (filetoread.c_str());
         
@@ -79,7 +83,7 @@ void Parser::v_clear()
 {
     while (_conf_line.size( ) > 0)
     {
-        
+        _conf_line.pop_back();
     }
 }
 
@@ -302,6 +306,42 @@ bool Parser::IsLocationCGIExtracted(string Line, Server *srv)
     return (true);
 }
 
+bool Parser::IsLocationImgExtracted(string Line, Server *srv)
+{
+    string tmp;
+    vector <string> v_location = _split(Line, ';');
+    vector <string> v_tmp;
+
+
+    for (size_t  i= 0; i < v_location.size(); i++)
+    {
+        if (v_location[i].find ("root") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() != 2)
+                return (false);
+            srv->location_images.root = v_tmp[1];
+        }
+        else if (v_location[i].find ("methods") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() <= 1)
+                return (false);
+            
+            for (size_t i = 1 ; i < v_tmp.size(); i++)
+            {
+               
+                srv->location_images.methods.push_back(v_tmp[i]);
+            }
+        }
+        else
+            return (false);
+    }
+    return (true);
+}
+
 
 
 int _find_char_position(std::string s, char c)
@@ -428,6 +468,7 @@ bool Parser::_ExtractData(Server *srv)
 
     string line = "";
     string tmp =  "";
+    // cout << "i extract data \n";
 
     for (size_t i = 0; i < _conf_line.size(); i++)
     {
@@ -478,13 +519,24 @@ bool Parser::_ExtractData(Server *srv)
             listen[0] = _trim(listen[0]);
             listen[1] = _trim(listen[1]);
 
-            srv->listening.ip_addr = listen[0];
+            srv->listening.ip_addr = listen[0]; // to be deleted;
+            srv->listening.Port = atoi (listen[1].c_str()); // to be deleted;
         
-            if (!_is_Valide_ipaddress(srv))
+            if (!_is_Valide_ipaddress(listen[0]))
                 return (false);
 
-            if (!_Validate_Ports(srv, listen[1]) )
+            if (!_Validate_Ports(listen[1]) )
                 return (false);
+
+            Server::Listening l;
+
+            l.ip_addr = listen[0];
+
+            l.Port  = atoi (listen[1].c_str());
+            srv->v_listening.push_back (l);
+
+            // to be deleted;
+
         }
         
         
@@ -622,6 +674,46 @@ bool Parser::_ExtractData(Server *srv)
             }
         }
 
+        else if (line.find("location /images") != string::npos)
+        {
+
+
+            line  = line.substr(_find_word((char *)line.c_str(), "location /images") + 1, line.length());
+
+            int pos  = 0;
+            while ((pos = _find_char_position(line, '{')) == -1)
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            line  = line.substr(pos  + 1, line.length());
+
+            while ((pos = _find_char_position(line, '}')) == -1)
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            tmp = line.substr(pos, line.length());
+            line  = line.substr(0, pos);
+            _trim(line);
+
+            if (!_isLinesSeparated(line))
+                return (false);
+
+            if (!IsLocationImgExtracted(line, srv))
+                return (false);
+        }
+
         else if (line.find("location /") != string::npos)
         {
             line  =  line.substr(_find_word((char *)line.c_str(), "location /") + 1, line.length());
@@ -671,6 +763,7 @@ bool Parser::_ExtractData(Server *srv)
                                     &&   _conf_line[i][j] != '\0')
                 {
                     cout << "unkown config\n";
+                    // cout << "[line: **" << line << "**]\n";
                     return (false);
                 }
                     
@@ -680,16 +773,16 @@ bool Parser::_ExtractData(Server *srv)
     return (true);
 }
 
-bool Parser::_is_Valide_ipaddress(Server *srv)
+bool Parser::_is_Valide_ipaddress(string ip)
 {
-    if (srv->listening.ip_addr.empty())
+    if (ip.empty())
     {
         return (false);
     }
 
 
 
-    vector <string > v_ipaddress = _split(srv->listening.ip_addr, '.');
+    vector <string > v_ipaddress = _split(ip, '.');
 
     if (v_ipaddress.size() != 4)
         return (false);
@@ -711,25 +804,73 @@ bool Parser::_is_Valide_ipaddress(Server *srv)
     return (true);
 }
 
-bool   Parser::_Validate_Ports(Server *srv, string s)
+bool   Parser::_Validate_Ports(string s)
 {
     if (!isvalidnumber(s))
         return (false);
 
 
-    srv->listening.Port  = atoi (s.c_str());
+    int num  = atoi (s.c_str());
 
-    if (srv->listening.Port > 65535 || srv->listening.Port < 0)
+    if (num > 65535 || num < 0)
         return (false);
     return (true);
 }
 
 
+bool isdirectoryopened(string path)
+{
+    DIR *dir = opendir (path.c_str());
+
+    if (dir)
+    {
+        closedir (dir);
+        return (true);
+    }
+    return (false);
+}
+
+
 bool Parser::_ValidateData(Server *srv)
 {
-    cout << "hey validate  data to do .\n";
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    cout << "validate data:\n";
 
-    cout << "Just Reading:" << srv->location.index << endl;
+
+
+    if (srv->listening.ip_addr.empty() || srv->listening.Port==-1)
+    {
+        cerr << "cannot read ip adress and port \n";
+        return (false);
+    }
+
+
+
+     srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+
+    if (srv->error.error.html_content.empty())
+    {
+        cerr << "cannot read " <<srv->error.error.html_path << "\n";
+        return (false);
+    }
+
+    if (!isdirectoryopened( srv->location.root))
+    {
+        cerr << "cannot open  default location folder\n";
+        return (false);
+    }
+
+    if (!isdirectoryopened( srv->location_upload.root))
+    {
+        cerr << "cannot open  upload folder\n";
+        return (false);
+    }
+        
+    if (!isdirectoryopened( srv->location_images.root))
+    {
+        cerr << "cannot open  images folder\n";
+        return (false);
+    }
 
     srv->location.index_content = _ReadData(srv->location.root + "/" + 
            srv->location.index );
@@ -740,16 +881,20 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
-     cout << "Just Reading:" << srv->error.error.html_path << endl;
-    
-    srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+    string htmlpath =  srv->location.root + "/cgi_answer.html";
+    srv->cgi_bin.htmlcontent = _ReadData  (htmlpath);
 
-    if (srv->error.error.html_content.empty())
+
+    if (srv->cgi_bin.htmlcontent.empty())
     {
-        cerr << "cannot read " <<srv->error.error.html_path << "\n";
+        cerr << "cannot read " << srv->location.root + "/cgi_answer.html" << "\n";
         return (false);
     }
 
+
+    cout << "still need validating cgi in parsing\n";
+    cout << "still need validation for python || cgi_pass existence\n";
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
     return (true);
 }
 
@@ -762,6 +907,10 @@ Server *Parser::Parse()
         return (NULL);
 
     Server *srv  = new Server();
+
+    srv->listening.ip_addr = "";
+    srv->listening.Port=-1;
+    srv->cgi_bin.htmlcontent = "";
     
     if (!_ExtractData(srv))
     {

@@ -42,7 +42,8 @@ public:
     enMethod Method;
     enResponseConnection Connection;
 
- std::string  Replace_html_error_message(string body, int statuscode, string statusMessage);
+    std::string  Replace_html_error_message(string body, int statuscode, string statusMessage);
+    std::string  Replace_html_cgi_message(string body, string output);
 
 };
 

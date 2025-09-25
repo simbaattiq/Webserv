@@ -4,7 +4,7 @@ BUILDDIR = build
 SRCS = $(wildcard $(SRCDIR)/*.cpp)
 OBJS = $(patsubst $(SRCDIR)/%.cpp, $(BUILDDIR)/%.o, $(SRCS))
 CC = c++
-CCFLAGS = -Wall -Wextra -Werror -std=c++98 
+CCFLAGS = -Wall -Wextra -Werror 
 
 all: $(NAME)
 

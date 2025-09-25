@@ -107,3 +107,17 @@ string ResponseBuilder::Replace_html_error_message(string body, int statuscode, 
 
     return html;
 }
+
+string ResponseBuilder::Replace_html_cgi_message(string body, string output)
+{
+    std::string html = body;
+
+    size_t pos;
+    pos = html.find("{{MESSAGE}}");
+    if (pos != std::string::npos)
+    {
+        html.replace(pos, 11, output);
+    }
+
+    return html;
+}

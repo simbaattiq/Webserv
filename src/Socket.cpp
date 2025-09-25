@@ -31,7 +31,7 @@ void Socket::create()
     }
 }
 
-void Socket::bind(int port)
+void Socket::bind(int port, const std::string& ip_address)
 {
     if (_fd == -1)
     {
@@ -40,15 +40,33 @@ void Socket::bind(int port)
 
     sockaddr_in address;
     address.sin_family = AF_INET;
-    address.sin_addr.s_addr = INADDR_ANY;
+    
+    if (ip_address.empty() || ip_address == "0.0.0.0")
+    {
+        address.sin_addr.s_addr = INADDR_ANY;
+    }
+    else
+    {
+        if (inet_pton(AF_INET, ip_address.c_str(), &address.sin_addr) <= 0)
+        {
+            throw std::runtime_error("Invalid IP address: " + ip_address);
+        }
+    }
+    
     address.sin_port = htons(port);
 
     if (::bind(_fd, (struct sockaddr*)&address, sizeof(address)) == -1)
     {
         perror("bind");
         close(_fd);
-        throw std::runtime_error("Failed to bind socket.");
+        throw std::runtime_error("Failed to bind socket to " + ip_address + ":" + std::to_string(port));
     }
+}
+
+// Keep the old bind method for backward compatibility
+void Socket::bind(int port)
+{
+    bind(port, "");
 }
 
 void Socket::listen(int backlog) 

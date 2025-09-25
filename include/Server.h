@@ -26,13 +26,13 @@ class Server
            string html_content;
         };
 
-    private :
-    class Listening
-    {
-        public : 
-            string ip_addr;
-            int   Port;
-    }; 
+    public :
+        class Listening
+        {
+            public : 
+                string ip_addr;
+                int   Port;
+        }; 
 
     class Error
     {
@@ -61,6 +61,15 @@ class Server
             vector <string> methods;
     };
 
+    class Location_Images
+    {
+        public :
+            string root;
+            bool autoindex;
+            vector <string> methods;
+            string default_img;
+    };
+
 
     class Cgi_Bin
     {
@@ -68,6 +77,7 @@ class Server
             string root;
             string cgi_pass;
             vector <string> methods;
+            string htmlcontent;
     };
 
 
@@ -75,10 +85,12 @@ class Server
 
 
     Server();
-    Listening listening;
+    Listening listening; // will be deleted;
+    vector <Listening > v_listening; // new one;
     Error     error;
     Location  location;
     Location_Upload location_upload;
+    Location_Upload location_images;
     size_t          max_body_size;
     Cgi_Bin cgi_bin;
     int     server_fd;

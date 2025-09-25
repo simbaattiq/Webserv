@@ -1,7 +1,6 @@
 #ifndef REQUEST_PARSER_HPP
 #define REQUEST_PARSER_HPP
 
-using namespace std;
 
 #include <string>
 #include <map>
@@ -11,7 +10,13 @@ using namespace std;
 #include "../include/Server.h"
 #include <fstream>
 #include "../include/Parser.h"
+#include <sys/wait.h>
 // #include <cstdio>
+
+
+using namespace std;
+
+
 
 extern Server *srv;
 
@@ -38,6 +43,23 @@ private:
     bool saveBodyToFile(const string filepath);
     bool _Check_Delete_Method(ResponseBuilder & response);
     bool _Delete_Content(vector <string > uri);
+    bool execute_cgi_post(string cgi_output);
+
+
+    // added
+    struct UploadedFile
+    {
+        std::string fieldName;
+        std::string fileName;
+        std::string contentType;
+        std::string content;
+    };
+        
+    std::vector<UploadedFile> _uploadedFiles;
+        
+    bool parseMultipartFormData(const std::string& contentType);
+    std::string extractBoundary(const std::string& contentType);
+    void parseMultipartParts(const std::string& boundary);
     
 
 
@@ -47,7 +69,7 @@ public:
 
     bool parse(const std::string& raw_request);
     void clear();
-
+    std::vector<std::string> _split(const std::string& str, char delimiter);
     const std::string& getMethod() const;
     const std::string& getUri() const;
     const std::string& getHttpVersion() const;
