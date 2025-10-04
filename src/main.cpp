@@ -11,6 +11,7 @@
 #include "ResponseBuilder.hpp"
 #include "../include/Server.h"
 #include "../include/Parser.h"
+#include "../include/globals.h"
 
 #include <cerrno>
 #include <cstdio>
@@ -159,7 +160,69 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 }
 
 
+static void printStringVector(const std::vector<std::string>& v)
+{
+    std::cout << "[";
+    for (size_t i = 0; i < v.size(); ++i)
+    {
+        std::cout << v[i];
+        if (i + 1 < v.size()) std::cout << ", ";
+    }
+    std::cout << "]";
+}
+
+// Main debug function to print servers
+void printServers(const std::vector<Server>& servers)
+{
+    using std::cout;
+    using std::endl;
+
+    cout << "=== v_srv (" << servers.size() << ") ===" << endl;
+    for (size_t si = 0; si < servers.size(); ++si)
+    {
+        const Server& s = servers[si];
+        cout << "Server #" << si << ":" << endl;
+
+        // listening (both single listening and v_listening)
+        cout << "  single listening: " << s.listening.ip_addr << ":" << s.listening.Port << endl;
+        cout << "  v_listening (" << s.v_listening.size() << "):" << endl;
+        for (size_t i = 0; i < s.v_listening.size(); ++i)
+            cout << "    - " << s.v_listening[i].ip_addr << ":" << s.v_listening[i].Port << endl;
+
+        // error page
+        cout << "  error_page.path: " << s.error.error.html_path << endl;
+
+        // general settings
+        cout << "  max_body_size: " << s.max_body_size << endl;
+
+        // location
+        cout << "  location.root: " << s.location.root << endl;
+        cout << "  location.index: " << s.location.index << endl;
+        cout << "  location.autoindex: " << (s.location.autoindex ? "ON" : "OFF") << endl;
+        cout << "  location.methods: "; printStringVector(s.location.methods); cout << endl;
+
+        // upload location
+        cout << "  upload.root: " << s.location_upload.root << endl;
+        cout << "  upload.upload_store: " << s.location_upload.upload_store << endl;
+        cout << "  upload.methods: "; printStringVector(s.location_upload.methods); cout << endl;
+
+        // images location
+        cout << "  images.root: " << s.location_images.root << endl;
+        cout << "  images.methods: "; printStringVector(s.location_images.methods); cout << endl;
+
+        // cgi
+        cout << "  cgi_bin.root: " << s.cgi_bin.root << endl;
+        cout << "  cgi_bin.cgi_pass: " << s.cgi_bin.cgi_pass << endl;
+        cout << "  cgi_bin.methods: "; printStringVector(s.cgi_bin.methods); cout << endl;
+
+        cout << "------------------------------" << endl;
+    }
+    cout << "=== end v_srv ===" << endl;
+}
+
+
 Server *srv = NULL;
+vector <Server>  v_srv;
 
 int main(int argc, char **argv)
 {
@@ -173,6 +236,20 @@ int main(int argc, char **argv)
 
     Parser parser (argv[1]);
     srv = parser.Parse();
+
+
+    // v_srv = parser.getServers();
+
+    // if (v_srv.empty())
+    // {
+    //     cout << "No servers found in configuration\n";
+    //     return 1;
+    // }
+
+    // cout << "Found " << v_srv.size() << " server(s) in configuration\n";
+
+
+    // printServers(v_srv);
 
 
     if (srv == NULL)

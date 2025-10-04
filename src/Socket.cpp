@@ -1,5 +1,6 @@
 #include "Socket.hpp"
 #include <iostream>
+#include <sstream>
 
 Socket::Socket() : _fd(-1) {}
 
@@ -31,6 +32,13 @@ void Socket::create()
     }
 }
 
+std::string int_to_string(int num)
+{
+    std::ostringstream ss;
+    ss << num;
+    return ss.str();
+}
+
 void Socket::bind(int port, const std::string& ip_address)
 {
     if (_fd == -1)
@@ -59,7 +67,7 @@ void Socket::bind(int port, const std::string& ip_address)
     {
         perror("bind");
         close(_fd);
-        throw std::runtime_error("Failed to bind socket to " + ip_address + ":" + std::to_string(port));
+        throw std::runtime_error("Failed to bind socket to " + ip_address + ":" + int_to_string(port));
     }
 }
 
