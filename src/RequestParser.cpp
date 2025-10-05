@@ -272,7 +272,7 @@ bool _isFileOpend (string filename)
 }
 
 
-bool execute_cgi(string  & response, string arg, string path)
+bool execute_cgi(string  & response, string arg, string path, const  Server *srv)
 {
     pid_t pid  ;
     int fd[2];
@@ -286,7 +286,7 @@ bool execute_cgi(string  & response, string arg, string path)
 
         if (pipe(fd) == -1)
         {
-            status = 500; // internal;
+            status = 500;
             return (false);
         }
 
@@ -337,7 +337,7 @@ bool execute_cgi(string  & response, string arg, string path)
 }
 
 
-bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *srv)
 {
     string imagedata = "";
     bool isimagerequested = false;
@@ -423,8 +423,6 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 
         else
         {
-
-        
                 iscgi = true;
 
                 string scriptpath = _uri.substr(strlen("/cgi-bin/"));
@@ -461,7 +459,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
                     }
                     else
                     {
-                        if (execute_cgi(output, v_arg[1], scriptpath))
+                        if (execute_cgi(output, v_arg[1], scriptpath, srv))
                         {
                             cout << "execution pass\n";
                         }
@@ -523,7 +521,6 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
         }
         else
         {
-            response.addHeader("Content-Type", "text/html");
             response.setBody(srv->location.index_content);
         }
         
@@ -577,7 +574,7 @@ bool RequestParser::saveBodyToFile(const string filepath)
     return (true);
 }
 
-bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
+bool RequestParser::handleUploadData( int & statuscode, string &fullpath, const Server *srv)
 {
     try
     {
@@ -611,7 +608,7 @@ bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
 
 
 // new updated method
-bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Post_Method(ResponseBuilder & response, const Server *srv)
 {
     int statuscode = 400;
     string fullpath = "";
@@ -716,7 +713,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
                 else
                 {
                     // regular POST data as before
-                    if (handleUploadData(statuscode, fullpath)) 
+                    if (handleUploadData(statuscode, fullpath, srv)) 
                     {
                         // Success
                     }
@@ -788,7 +785,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
                     if (v_arg.size() == 2 && v_arg[0] == "msg")
                     {
 
-                        if (execute_cgi(cgi_output, v_arg[1], scriptpath))
+                        if (execute_cgi(cgi_output, v_arg[1], scriptpath, srv))
                         {
                             statuscode = 200;
                             response.setBody(cgi_output);
@@ -863,7 +860,7 @@ string AssembleWord(vector < string > v_uri, string wordtonotadd)
     return (path);
 }
 
-bool RequestParser::_Delete_Content(vector < string > v_uri)
+bool RequestParser::_Delete_Content(vector < string > v_uri, const Server *srv)
 {
     try
     {
@@ -889,19 +886,15 @@ bool RequestParser::_Delete_Content(vector < string > v_uri)
 
 
 
-bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Delete_Method(ResponseBuilder & response, const Server *srv)
 {
 
     (void)response;
     int statuscode = 200;
 
-
-    cout << "****************uri  : "  <<   _uri << endl;
-
     Parser prs ("");
     vector <string > v_uri =prs. _split(_uri, '/');
 
-    
     if (v_uri.size() <= 1)
         statuscode=400;
     
@@ -943,7 +936,7 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
 
     if (statuscode == 200)
     {
-        if (!_Delete_Content(v_uri))
+        if (!_Delete_Content(v_uri, srv))
         {
             statuscode = 500;
         }
@@ -963,24 +956,26 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
 
 
 
-bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
+bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response, const Server *srv)
 {
+
+    cout << "hey from validate data for response \n";
 
     if (_method == "GET")
     {
         response.Method = response.GET;
-        _Check_Get_Method(response);
+        _Check_Get_Method(response, srv);
         
     }
     else if (_method == "DELETE")
     {
         response.Method = response.DELETE;
-        _Check_Delete_Method(response);
+        _Check_Delete_Method(response, srv);
     }
     else if (_method == "POST")
     {
         response.Method = response.POST;
-        _Check_Post_Method(response);
+        _Check_Post_Method(response, srv);
     }
     else
     {
@@ -1008,6 +1003,17 @@ const std::string& RequestParser::getUri() const { return _uri; }
 const std::string& RequestParser::getHttpVersion() const { return _httpVersion; }
 
 const std::map<std::string, std::string>& RequestParser::getHeaders() const { return _headers; }
+
+const std::string RequestParser::getHeader(std::string name) 
+{
+    for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it)
+    {
+        if (it->first == name)
+            return (it->second);
+    }
+    return ("");
+}
+
 
 const std::string& RequestParser::getBody() const { return _body; }
 

@@ -1,19 +1,22 @@
 #include "EventHandler.hpp"
 #include <iostream>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <cstring>
 
 EventHandler::EventHandler() {}
 
 EventHandler::~EventHandler() {}
 
 
-// adds a new file descriptor to the list of monitored Fds. 
-// events specifies what we are interested in (POLLIN = read, POLLOUT = write) ready.
 void EventHandler::addFd(int fd, short events) 
 {
     pollfd pfd;
     pfd.fd = fd;
     pfd.events = events;
-    pfd.revents = 0; // Initialize revents to 0
+    pfd.revents = 0;
     _pollfds.push_back(pfd);
 }
 
@@ -30,11 +33,6 @@ void EventHandler::removeFd(int fd)
 }
 
 
-// this is the core method. 
-// it calls the poll() system call
-// which blocks until one or more of the monitored file descriptors are ready for I/O,
-// or the timeout_ms expires. It returns the number of file descriptors for which events occurred.
-
 int EventHandler::pollEvents(int timeout_ms)
 {
     int num_events = poll(&_pollfds[0], _pollfds.size(), timeout_ms);
@@ -49,4 +47,16 @@ int EventHandler::pollEvents(int timeout_ms)
 const std::vector<pollfd>& EventHandler::getPollFds() const
 {
     return _pollfds;
+}
+
+int EventHandler::getClientPort(int client_fd) const {
+    struct sockaddr_in addr;
+    socklen_t addr_len = sizeof(addr);
+
+    if (getpeername(client_fd, (struct sockaddr*)&addr, &addr_len) == -1) {
+        std::cerr << "Error getting client port: " << strerror(errno) << std::endl;
+        return -1;
+    }
+
+    return ntohs(addr.sin_port);
 }

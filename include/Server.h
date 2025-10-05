@@ -10,6 +10,7 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <queue>
+#include <cstdlib>
 
 using namespace std;
 
@@ -85,6 +86,7 @@ class Server
 
 
     Server();
+    Server& operator=(const Server& other);
     Listening listening; // will be deleted;
     vector <Listening > v_listening; // new one;
     Error     error;
@@ -96,6 +98,7 @@ class Server
     int     server_fd;
     bool Setup();
     string ReadRequest(int client_Id);
+    static Server* select_correspondent_server ( std::string host);
 
 };
 

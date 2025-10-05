@@ -20,6 +20,7 @@ class Parser
       bool _ReadData();
       string  _ReadData(string s);
       bool _ValidateData(Server *srv);
+      bool _ValidateData_ ();
       bool _ExtractData(Server *srv);
       vector <string> _conf_line;
       string _trim(const std::string& str);

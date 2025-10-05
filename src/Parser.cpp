@@ -1399,6 +1399,32 @@ bool Parser::_ExtractData_( )
     return (true);
 }
 
+bool Parser::_ValidateData_ ()
+{
+    if (v_srv.empty())
+    {
+        cout << "no server to validate\n";
+        return (false);
+    }
+
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    cout << "validate data:\n";
+
+
+    for (size_t i = 0; i < v_srv.size(); i++)
+    {
+        cout << "Validating server " << i + 1 << ":\n";
+        if (!_ValidateData(&v_srv[i]))
+        {
+            cout << "Server " << i + 1 << " validation failed.\n";
+            return (false);
+        }
+        cout << "Server " << i + 1 << " validated successfully.\n";
+    }
+
+    return (true);
+}
+
 
 vector <Server> Parser::getServers()
 {
@@ -1413,6 +1439,12 @@ vector <Server> Parser::getServers()
     if (!_ExtractData_())
     {
         cout << "data not extracted \n";
+        return v_srv.clear(), v_srv;
+    }
+
+    if (!_ValidateData_())
+    {
+        cout << "data not validated \n";
         return v_srv.clear(), v_srv;
     }
     return v_srv;

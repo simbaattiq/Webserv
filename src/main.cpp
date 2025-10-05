@@ -47,8 +47,6 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 {
     char buffer[8192];
     int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
-
-
     
     if (bytes_read > 0)
     {
@@ -94,12 +92,36 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
         {
             try
             {
-                if (parser.parse(clientBuffers[client_fd])) //// // /
+                bool isparsed = false;
+                Server *selectedServer=NULL;
+                if (parser.parse(clientBuffers[client_fd]))
+                {
+                    isparsed = true;
+                }
+
+                if (isparsed)
+                {
+                    string host = parser.getHeader("Host");
+                    selectedServer = Server::select_correspondent_server (host);
+
+                    if (!selectedServer)
+                    {
+                        cout << "cannot select a server\n";
+                        isparsed = false;
+                    }
+                    else
+                    {
+                        cout << "server found \n &*******\n";
+                    }
+                }
+
+                if (isparsed && selectedServer)
                 {
                     ResponseBuilder responseBuilder;
-                    parser.ValidateDataForResponse(responseBuilder);
+
+                    parser.ValidateDataForResponse(responseBuilder,  selectedServer);
                     std::string response = responseBuilder.build();
-                    
+
                     send(client_fd, response.c_str(), response.length(), 0);
                     
                     clientBuffers.erase(client_fd);
@@ -108,7 +130,7 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                 else
                 {
                     std::cout << "Failed to parse request from client " << client_fd << std::endl;
-                    
+ 
                     ResponseBuilder errorResponse;
                     errorResponse.setStatus(400, "Bad Request");
                     errorResponse.addHeader("Content-Type", "text/html");
@@ -184,8 +206,6 @@ void printServers(const std::vector<Server>& servers)
         cout << "Server #" << si << ":" << endl;
 
         // listening (both single listening and v_listening)
-        cout << "  single listening: " << s.listening.ip_addr << ":" << s.listening.Port << endl;
-        cout << "  v_listening (" << s.v_listening.size() << "):" << endl;
         for (size_t i = 0; i < s.v_listening.size(); ++i)
             cout << "    - " << s.v_listening[i].ip_addr << ":" << s.v_listening[i].Port << endl;
 
@@ -221,7 +241,7 @@ void printServers(const std::vector<Server>& servers)
 }
 
 
-Server *srv = NULL;
+// Server *srv = NULL;
 vector <Server>  v_srv;
 
 int main(int argc, char **argv)
@@ -235,62 +255,41 @@ int main(int argc, char **argv)
 
 
     Parser parser (argv[1]);
-    srv = parser.Parse();
+    // srv = parser.Parse();
 
 
-    // v_srv = parser.getServers();
+    v_srv = parser.getServers();
 
-    // if (v_srv.empty())
-    // {
-    //     cout << "No servers found in configuration\n";
-    //     return 1;
-    // }
-
-    // cout << "Found " << v_srv.size() << " server(s) in configuration\n";
-
-
-    // printServers(v_srv);
-
-
-    if (srv == NULL)
+    if (v_srv.empty())
     {
-        std::cerr << "error parsing Config File\n";
-        return (1);
+        cout << "No servers found in configuration\n";
+        return 1;
     }
+
     try
     {
         EventHandler eventHandler;
         int backlog = 10;
 
         // Create server sockets for each listening address/port
-        for (size_t i = 0; i < srv->v_listening.size(); ++i)
+        for (size_t j = 0; j < v_srv.size(); j++)
         {
-            Socket* serverSocket = new Socket();
-            serverSocket->create();
-            serverSocket->bind(srv->v_listening[i].Port);
-            serverSocket->listen(backlog);
-            
-            std::cout << "Server listening on " << srv->v_listening[i].ip_addr 
-                      << ":" << srv->v_listening[i].Port << std::endl;
-            
-            eventHandler.addFd(serverSocket->getFd(), POLLIN);
-            serverSockets.push_back(serverSocket);
+            for (size_t i = 0; i < v_srv[j].v_listening.size(); ++i)
+            {
+                Socket* serverSocket = new Socket();
+                serverSocket->create();
+                serverSocket->bind(v_srv[j].v_listening[i].Port, v_srv[j].v_listening[i].ip_addr);
+                serverSocket->listen(backlog);
+
+                std::cout << "Server listening on " << v_srv[j].v_listening[i].ip_addr 
+                          << ":" << v_srv[j].v_listening[i].Port << std::endl;
+
+                eventHandler.addFd(serverSocket->getFd(), POLLIN);
+                serverSockets.push_back(serverSocket);
+            }
         }
 
-        if (srv->v_listening.empty() && !srv->listening.ip_addr.empty())
-        {
-            Socket* serverSocket = new Socket();
-            serverSocket->create();
-            serverSocket->bind(srv->listening.Port);
-            serverSocket->listen(backlog);
-            
-            std::cout << "Server listening on " << srv->listening.ip_addr 
-                      << ":" << srv->listening.Port << std::endl;
-            
-            eventHandler.addFd(serverSocket->getFd(), POLLIN);
-            serverSockets.push_back(serverSocket);
-        }
-
+        cout << "every server is binded now \n";
         while (true)
         {
             int num_events = eventHandler.pollEvents(-1);
@@ -343,8 +342,8 @@ int main(int argc, char **argv)
             delete serverSockets[i];
         }
         
-        if (srv)
-            delete srv;
+        // if (srv)
+        //     delete srv;
         return 1;
     }
     for (size_t i = 0; i < serverSockets.size(); ++i)
@@ -353,8 +352,8 @@ int main(int argc, char **argv)
        }
 
 
-    if (srv)
-        delete (srv);
+    // if (srv)
+    //     delete (srv);
 
     return 0;
 }

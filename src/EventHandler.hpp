@@ -19,11 +19,13 @@ public:
     ~EventHandler();
     EventHandler(const EventHandler&);
     EventHandler& operator=(const EventHandler&);
+    
 
     void addFd(int fd, short events);
     void removeFd(int fd);
     int pollEvents(int timeout_ms);
     const std::vector<pollfd>& getPollFds() const;
+    int getClientPort(int client_fd) const;
 
 };
 

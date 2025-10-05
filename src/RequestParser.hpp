@@ -18,7 +18,7 @@ using namespace std;
 
 
 
-extern Server *srv;
+// extern Server *srv;
 
 
 class RequestParser 
@@ -35,14 +35,14 @@ private:
     size_t find_crlfcrlf(const std::string& s, size_t pos = 0) const;
     std::string trim(const std::string& str) const;
     bool _Extract_Request_Data(vector <string> v_request);
-    bool _Check_Get_Method(ResponseBuilder & response);
-    bool _Check_Post_Method(ResponseBuilder & response);
+    bool _Check_Get_Method(ResponseBuilder & response, const Server *srv);
+    bool _Check_Post_Method(ResponseBuilder & response, const Server *srv);
     bool _isHttpSupported ();
-    bool handleUploadData( int & statuscode, string &fullpath);
+    bool handleUploadData( int & statuscode, string &fullpath, const Server *srv);
     string GenerateUploadFile();
     bool saveBodyToFile(const string filepath);
-    bool _Check_Delete_Method(ResponseBuilder & response);
-    bool _Delete_Content(vector <string > uri);
+    bool _Check_Delete_Method(ResponseBuilder & response, const Server *srv);
+    bool _Delete_Content(vector <string > uri, const Server *srv);
     bool execute_cgi_post(string cgi_output);
 
 
@@ -74,8 +74,9 @@ public:
     const std::string& getUri() const;
     const std::string& getHttpVersion() const;
     const std::map<std::string, std::string>& getHeaders() const;
+    const std::string  getHeader(std::string name) ;
     const std::string& getBody() const;
-    bool ValidateDataForResponse(ResponseBuilder &response);
+    bool ValidateDataForResponse(ResponseBuilder &response, const Server *srv);
 
     
 
