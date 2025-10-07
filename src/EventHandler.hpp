@@ -25,7 +25,6 @@ public:
     void removeFd(int fd);
     int pollEvents(int timeout_ms);
     const std::vector<pollfd>& getPollFds() const;
-    int getClientPort(int client_fd) const;
 
 };
 

@@ -1,0 +1,20 @@
+{
+    "configurations": [
+        {
+            "name": "WSL-GCC",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "//wsl.localhost/Ubuntu-22.04/usr/include",
+                "//wsl.localhost/Ubuntu-22.04/usr/include/x86_64-linux-gnu",
+                "//wsl.localhost/Ubuntu-22.04/usr/local/include"
+            ],
+            "defines": [],
+            "compilerPath": "//wsl.localhost/Ubuntu-22.04/usr/bin/c++",
+            "intelliSenseMode": "linux-gcc-x64",
+            "cStandard": "c98",
+            "cppStandard": "c++98"
+        }
+
+    ],
+    "version": 4
+}

@@ -45,6 +45,7 @@ private:
     bool _Delete_Content(vector <string > uri, const Server *srv);
     bool execute_cgi_post(string cgi_output);
 
+    std::string make_autoindex_html(const std::string &dirpath, const std::string &request_path);
 
     // added
     struct UploadedFile

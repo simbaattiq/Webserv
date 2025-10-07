@@ -1,0 +1,46 @@
+
+
+## Missing Features and Improvements
+
+### Configuration Validation
+- [ ] Validate `cgi_pass` paths and ensure the executable exists.
+- [ ] Validate `error_page` files for existence and readability.
+- [ ] Ensure `upload_store` directories exist and are writable.
+- [ ] Properly handle `autoindex` validation for directories.
+
+### Error Handling
+- [ ] Dynamically serve error pages for all HTTP status codes.
+- [ ] Replace placeholders (e.g., `{{STATUS}}`, `{{MESSAGE}}`) in error templates.
+- [ ] Handle malformed HTTP requests and return appropriate status codes.
+
+### CGI Script Execution
+- [ ] Pass necessary environment variables (e.g., `QUERY_STRING`, `CONTENT_LENGTH`, `CONTENT_TYPE`) to CGI scripts.
+- [ ] Handle errors during CGI execution (e.g., script not found, execution failure).
+- [ ] Parse CGI script output to separate headers and body.
+
+### File Uploads
+- [ ] Add validation for uploaded file types and sizes.
+- [ ] Improve error handling for malformed multipart form data.
+
+### Directory Listing
+- [ ] Generate proper HTML for directory listings when `autoindex on` is set.
+- [ ] Handle cases where directory permissions prevent listing.
+
+### Logging
+- [ ] Log incoming requests (method, URI, status code).
+- [ ] Log errors and exceptions for debugging purposes.
+- [ ] Log server startup, shutdown, and connection events.
+
+### Testing
+- [ ] Test large file uploads, invalid HTTP requests, and concurrent connections.
+- [ ] Use tools like `curl` and `Postman` to test the server.
+- [ ] Add automated tests for configuration parsing, request handling, and response generation.
+
+### Optimization
+- [ ] Optimize memory usage for large requests and responses.
+- [ ] Improve performance for handling multiple concurrent connections.
+
+### Security
+- [ ] Sanitize user input to prevent directory traversal attacks.
+- [ ] Implement rate limiting to prevent abuse.
+- [ ] Avoid exposing sensitive server information in error messages.

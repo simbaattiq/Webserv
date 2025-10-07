@@ -24,6 +24,7 @@ class Server
         struct sterror
         {
            string html_path;
+           string index;
            string html_content;
         };
 
@@ -59,7 +60,9 @@ class Server
             string root;
             string upload_store;
             bool autoindex;
+            string index;
             vector <string> methods;
+            string index_content;
     };
 
     class Location_Images

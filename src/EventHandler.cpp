@@ -49,14 +49,3 @@ const std::vector<pollfd>& EventHandler::getPollFds() const
     return _pollfds;
 }
 
-int EventHandler::getClientPort(int client_fd) const {
-    struct sockaddr_in addr;
-    socklen_t addr_len = sizeof(addr);
-
-    if (getpeername(client_fd, (struct sockaddr*)&addr, &addr_len) == -1) {
-        std::cerr << "Error getting client port: " << strerror(errno) << std::endl;
-        return -1;
-    }
-
-    return ntohs(addr.sin_port);
-}

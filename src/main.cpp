@@ -109,10 +109,6 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                         cout << "cannot select a server\n";
                         isparsed = false;
                     }
-                    else
-                    {
-                        cout << "server found \n &*******\n";
-                    }
                 }
 
                 if (isparsed && selectedServer)
@@ -241,7 +237,6 @@ void printServers(const std::vector<Server>& servers)
 }
 
 
-// Server *srv = NULL;
 vector <Server>  v_srv;
 
 int main(int argc, char **argv)
@@ -253,10 +248,7 @@ int main(int argc, char **argv)
         return (1);
     }
 
-
     Parser parser (argv[1]);
-    // srv = parser.Parse();
-
 
     v_srv = parser.getServers();
 
@@ -282,14 +274,14 @@ int main(int argc, char **argv)
                 serverSocket->listen(backlog);
 
                 std::cout << "Server listening on " << v_srv[j].v_listening[i].ip_addr 
-                          << ":" << v_srv[j].v_listening[i].Port << std::endl;
+                          << ":" << v_srv[j].v_listening[i].Port << std::endl; // to be deleted
 
                 eventHandler.addFd(serverSocket->getFd(), POLLIN);
                 serverSockets.push_back(serverSocket);
             }
         }
 
-        cout << "every server is binded now \n";
+        cout << "##Start main loop##\n";
         while (true)
         {
             int num_events = eventHandler.pollEvents(-1);

@@ -3,6 +3,10 @@
 #include <iostream>
 #include <algorithm>
 #include "StatusCodes.hpp"
+#include <dirent.h>
+#include <sys/stat.h>
+#include <ctime>
+#include <iomanip>
 
 
 RequestParser::RequestParser() {
@@ -342,6 +346,8 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
     string imagedata = "";
     bool isimagerequested = false;
     bool iscgi              =  false;
+    bool is_upload_requested = false;
+    bool is_error = false;
     string output="";
 
 
@@ -349,6 +355,10 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
 
     (void)response;
     int statuscode = 200;
+
+   cout <<  ( srv->location_upload.root)  << endl;
+    cout <<  ( srv->location_upload.index) << endl;
+    
 
 
     if (_uri == "/")
@@ -358,13 +368,92 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
         else if (!isFileAccessible(srv->location.root))
             statuscode = 404;
         else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
+        {
+            if (srv->location.autoindex)
+            {
+                // generate autoindex for root
+                std::string html = make_autoindex_html(srv->location.root, "/");
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(html);
+                response.setStatus(200, "OK");
+                return true;
+            }
             statuscode = 403;
+        }
         else if (!_isHttpSupported())
             statuscode = 505;
         else if (!isHeaderNameExist("Host", _headers))
             statuscode = 400;
 
         cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri == ('/' + srv->location.root) || _uri == ('/' + srv->location.index) || 
+    _uri == ('/' + srv->location.root)  + ('/' + srv->location.index) )
+    {
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'   + srv->location.index))
+        {
+            if (srv->location.autoindex)
+            {
+                std::string html = make_autoindex_html(srv->location.root, "/");
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(html);
+                response.setStatus(200, "OK");
+                return true;
+            }
+            statuscode = 403;
+        }
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri == ('/' +  srv->location_upload.root) || _uri == ('/' + srv->location_upload.index) || 
+    _uri == ( srv->location_upload.root)  + ('/' + srv->location_upload.index) )
+    {
+        is_upload_requested = true;
+        if (!isMethodAuthorised(_method, srv->location_upload.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location_upload.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location_upload.root + '/'   + srv->location_upload.index))
+        {
+            if (srv->location_upload.autoindex)
+            {
+                std::string html = make_autoindex_html(srv->location_upload.root, ("/" + srv->location_upload.root));
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(html);
+                response.setStatus(200, "OK");
+                return true;
+            }
+            statuscode = 403;
+        }
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri ==  ( '/' + srv->error.error.html_path) || _uri == ('/' + srv->error.error.index) )
+    {
+        is_error = true;
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->error.error.html_path))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->error.error.html_path ))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
     }
     else if (v[0] == "images")
     {   
@@ -519,11 +608,22 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
             response.setBody(body);
 
         }
+        else if (is_upload_requested)
+        {
+            is_upload_requested = false;
+            response.setBody(srv->location_upload.index_content);
+        }
+        else if (is_error)
+        {
+            is_error = false;
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                200, "OK");
+            response.setBody(body);
+        }
         else
         {
             response.setBody(srv->location.index_content);
-        }
-        
+        }        
     }
 
     else
@@ -1115,4 +1215,78 @@ void RequestParser::parseMultipartParts(const std::string& boundary)
         
         pos = nextPos;
     }
+}
+
+std::string html_escape(const std::string &in)
+{
+    std::string out;
+    for (size_t i = 0; i < in.size(); ++i) {
+        unsigned char c = in[i];
+        switch (c) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            case '\'': out += "&#39;"; break;
+            default: out.push_back(c);
+        }
+    }
+    return out;
+}
+
+std::string RequestParser::make_autoindex_html(const std::string &dirpath, const std::string &request_path)
+{
+    std::ostringstream rows;
+    DIR *d = opendir(dirpath.c_str());
+    if (d)
+    {
+        struct dirent *ent;
+        while ((ent = readdir(d)) != NULL)
+        {
+            std::string name(ent->d_name);
+            if (name == ".") continue;
+            std::string href = name;
+            std::string display = name;
+            std::string sizeStr = "-";
+            std::string mtimeStr = "-";
+            struct stat st;
+            std::string full = dirpath + "/" + name;
+            if (stat(full.c_str(), &st) == 0)
+            {
+                if (S_ISDIR(st.st_mode))
+                {
+                    href += "/";
+                    display += "/";
+                }
+                else
+                {
+                    std::ostringstream ss;
+                    double sz = static_cast<double>(st.st_size);
+                    const char* units[] = {"B","KB","MB","GB"};
+                    int ui = 0;
+                    while (sz >= 1024.0 && ui < 3) { sz /= 1024.0; ++ui; }
+                    ss << std::fixed << std::setprecision(sz>=100.0?0:1) << sz << " " << units[ui];
+                    sizeStr = ss.str();
+                    char buf[64];
+                    std::tm tm;
+                    localtime_r(&st.st_mtime, &tm);
+                    strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+                    mtimeStr = buf;
+                }
+            }
+            std::string esc = html_escape(display);
+            rows << "<tr><td data-key=\"name\"><a href=\"" << href << "\">" << esc << "</a></td>";
+            rows << "<td data-key=\"size\" data-size=\"" << sizeStr << "\" class=\"small\">" << sizeStr << "</td>";
+            rows << "<td data-key=\"mtime\" class=\"small\">" << mtimeStr << "</td></tr>\n";
+        }
+        closedir(d);
+    }
+
+    std::ostringstream html;
+    html << "<!doctype html><html><head><meta charset=\"utf-8\"><title>Index of " << html_escape(request_path) << "</title>";
+    html << "<style>body{font-family:Arial;margin:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #eee}th{background:#fafafa}</style></head><body>";
+    html << "<h1>Index of " << html_escape(request_path) << "</h1><table id=\"ix\"><thead><tr><th data-key=\"name\">Name</th><th data-key=\"size\">Size</th><th data-key=\"mtime\">Last modified</th></tr></thead><tbody>";
+    html << rows.str();
+    html << "</tbody></table></body></html>";
+    return html.str();
 }

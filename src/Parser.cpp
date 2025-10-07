@@ -145,6 +145,8 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() != 2)
                 return (false);
+            if (v_tmp[0] != "root")
+                return (false);
             srv->location.root = v_tmp[1];
         }
         else if (v_location[i].find ("autoindex") != string::npos)
@@ -152,6 +154,9 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
             v_tmp = _split(v_location[i], ' ');
 
             if (v_tmp.size() != 2)
+                return (false);
+
+            if (v_tmp[0] != "autoindex")
                 return (false);
 
             v_tmp[1] = _string_ToUpper(v_tmp[1]);
@@ -174,6 +179,8 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() != 2)
                 return (false);
+            if (v_tmp[0] != "index")
+                return (false);
             srv->location.index =  v_tmp[1];
         }
         else if (v_location[i].find ("methods") != string::npos)
@@ -183,9 +190,14 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() <= 1)
                 return (false);
+
+            if (v_tmp[0] != "methods")
+                return (false);
             
-            for (size_t i = 0; i < v_tmp.size(); i++)
+            for (size_t i = 1; i < v_tmp.size(); i++)
             {
+                if (v_tmp[i] != "GET" && v_tmp[i] != "POST" && v_tmp[i] != "DELETE")
+                    return (false);
                 srv->location.methods.push_back(v_tmp[i]);
             }
         }
@@ -213,6 +225,14 @@ bool Parser::IsLocationUploadExtracted(string Line, Server *srv)
             if (v_tmp.size() != 2)
                 return (false);
             srv->location_upload.root = v_tmp[1];
+        }
+        else if (v_location[i].find ("index") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() != 2)
+                return (false);
+            srv->location_upload.index = v_tmp[1];
         }
         else if (v_location[i].find ("autoindex") != string::npos)
         {
@@ -834,11 +854,6 @@ bool isdirectoryopened(string path)
 
 bool Parser::_ValidateData(Server *srv)
 {
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
-    cout << "validate data:\n";
-
-
-
     if (srv->listening.ip_addr.empty() || srv->listening.Port==-1)
     {
         cerr << "cannot read ip adress and port \n";
@@ -847,7 +862,7 @@ bool Parser::_ValidateData(Server *srv)
 
 
 
-     srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+    srv->error.error.html_content = _ReadData(srv->error.error.html_path);
 
     if (srv->error.error.html_content.empty())
     {
@@ -892,42 +907,18 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
+    srv->location_upload.index_content = _ReadData(srv->location_upload.root + "/" + 
+           srv->location_upload.index );
 
-    cout << "still need validating cgi in parsing\n";
-    cout << "still need validation for python || cgi_pass existence\n";
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    if (srv->location_upload.index_content.empty())
+    {
+        cerr << "cannot read " << srv->location_upload.index << "\n";
+        return (false);
+    }
     return (true);
 }
 
-Server *Parser::Parse()
-{
-    if (!_isFileOpend())
-        return (NULL);
 
-    if (!_ReadData())
-        return (NULL);
-
-    Server *srv  = new Server();
-
-    srv->listening.ip_addr = "";
-    srv->listening.Port=-1;
-    srv->cgi_bin.htmlcontent = "";
-    
-    if (!_ExtractData(srv))
-    {
-        if (srv)
-            delete srv;
-        return (NULL); 
-    }
-       
-    if (!_ValidateData(srv))
-    {
-         if (srv)
-            delete srv;
-        return (NULL); 
-    }
-    return ( srv );
-}
 
 
 
@@ -944,8 +935,9 @@ bool find_location_bound(unsigned int &i, unsigned int &j, unsigned int &i_row,
     bool isleftfound = false;
 
     (void)right_start;
+    (void)location_type;
 
-    cout << "\nFinding bounds for " << location_type << " at line: " << _conf_line[index] << endl;
+
     for (size_t z = index; z < _conf_line.size(); z++)
     {
         size_t left = _conf_line[z].find('{');
@@ -982,14 +974,6 @@ bool find_location_bound(unsigned int &i, unsigned int &j, unsigned int &i_row,
 
 bool Parser::_ExtractServerContent(vector<string> &server_content, Server *srv)
 {
-    // Initialize server with default values
-    // srv->listening.ip_addr = "";
-    // srv->listening.Port = -1;
-    // srv->cgi_bin.htmlcontent = "";
-    // srv->v_listening.clear();
-
-    (void)srv;
-
     string line = "";
     string tmp =  "";
     
@@ -1061,6 +1045,14 @@ bool Parser::_ExtractServerContent(vector<string> &server_content, Server *srv)
                 return (false);
 
             srv->error.error.html_path = error_page[0];
+
+            vector <string> v_tmp = _split(error_page[0], '/');
+
+            if (v_tmp.size() > 1)
+                srv->error.error.index = v_tmp[v_tmp.size() - 1];
+            else
+                srv->error.error.index = error_page[0];
+
         }
         else if (line.find("client_max_body_size") != string::npos)
         {
@@ -1210,12 +1202,6 @@ bool Parser::_ExtractServerContent(vector<string> &server_content, Server *srv)
                 images_line += images_content[k] + " ";
             }
             images_line = _trim(images_line);
-
-            if (!IsLocationCGIExtracted(images_line, srv))
-            {
-                return (false);
-            }
-
             i = right_row;
            
 
@@ -1407,20 +1393,18 @@ bool Parser::_ValidateData_ ()
         return (false);
     }
 
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
-    cout << "validate data:\n";
-
 
     for (size_t i = 0; i < v_srv.size(); i++)
     {
-        cout << "Validating server " << i + 1 << ":\n";
         if (!_ValidateData(&v_srv[i]))
         {
-            cout << "Server " << i + 1 << " validation failed.\n";
             return (false);
         }
-        cout << "Server " << i + 1 << " validated successfully.\n";
     }
+
+    cout << "still need validating cgi in parsing\n";
+    cout << "still need validation for python || cgi_pass existence\n";
+    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
 
     return (true);
 }
