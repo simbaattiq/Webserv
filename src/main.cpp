@@ -47,6 +47,7 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 {
     char buffer[8192];
     int bytes_read = recv(client_fd, buffer, sizeof(buffer), 0);
+    bool conection = false;
     
     if (bytes_read > 0)
     {
@@ -86,6 +87,8 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
             }
         }
 
+
+        ResponseBuilder responseBuilder;
         
         
         if (isComplete || contentLength == 0)
@@ -113,7 +116,7 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
 
                 if (isparsed && selectedServer)
                 {
-                    ResponseBuilder responseBuilder;
+                    
 
                     parser.ValidateDataForResponse(responseBuilder,  selectedServer);
                     std::string response = responseBuilder.build();
@@ -122,6 +125,17 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                     
                     clientBuffers.erase(client_fd);
                     parser.clear();
+                    if (responseBuilder.Connection == responseBuilder.CLOSE)
+                    {
+                        eventHandler.removeFd(client_fd);
+                        close(client_fd);
+                        clientParsers.erase(client_fd);
+                        clientBuffers.erase(client_fd);
+                        cout << "connection just closed for " << client_fd << endl;
+                        conection = true;
+                    }
+                    else
+                        conection = false;
                 }
                 else
                 {
@@ -134,8 +148,10 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                     std::string response = errorResponse.build();
                     
                     send(client_fd, response.c_str(), response.length(), 0);
-                    
+                    eventHandler.removeFd(client_fd);
+                    close (client_fd);
                     clientBuffers.erase(client_fd);
+                    cout << "connection just closed for " << client_fd << endl;
                 }
             }
             catch (const std::exception& e)
@@ -149,19 +165,25 @@ void handleClientData(int client_fd, EventHandler& eventHandler)
                 std::string response = errorResponse.build();
                 
                 send(client_fd, response.c_str(), response.length(), 0);
-                
+                eventHandler.removeFd(client_fd);
+                close (client_fd);
                 clientBuffers.erase(client_fd);
+                cout << "connection just closed for " << client_fd << endl;
             }
         }
         // If not complete, wait for more data
     }
     else if (bytes_read == 0)
     {
-        std::cout << "Client " << client_fd << " disconnected" << std::endl;
-        eventHandler.removeFd(client_fd);
-        close(client_fd);
-        clientParsers.erase(client_fd);
-        clientBuffers.erase(client_fd);
+        if (conection)
+        {
+            std::cout << "Client " << client_fd << " disconnected" << std::endl;
+            eventHandler.removeFd(client_fd);
+            close(client_fd);
+            clientParsers.erase(client_fd);
+            clientBuffers.erase(client_fd);
+        }
+        
     }
     else
     {
@@ -201,32 +223,31 @@ void printServers(const std::vector<Server>& servers)
         const Server& s = servers[si];
         cout << "Server #" << si << ":" << endl;
 
-        // listening (both single listening and v_listening)
+      
         for (size_t i = 0; i < s.v_listening.size(); ++i)
             cout << "    - " << s.v_listening[i].ip_addr << ":" << s.v_listening[i].Port << endl;
 
-        // error page
+        
         cout << "  error_page.path: " << s.error.error.html_path << endl;
 
-        // general settings
+       
         cout << "  max_body_size: " << s.max_body_size << endl;
 
-        // location
+       
         cout << "  location.root: " << s.location.root << endl;
         cout << "  location.index: " << s.location.index << endl;
         cout << "  location.autoindex: " << (s.location.autoindex ? "ON" : "OFF") << endl;
         cout << "  location.methods: "; printStringVector(s.location.methods); cout << endl;
 
-        // upload location
+       
         cout << "  upload.root: " << s.location_upload.root << endl;
         cout << "  upload.upload_store: " << s.location_upload.upload_store << endl;
         cout << "  upload.methods: "; printStringVector(s.location_upload.methods); cout << endl;
 
-        // images location
+
         cout << "  images.root: " << s.location_images.root << endl;
         cout << "  images.methods: "; printStringVector(s.location_images.methods); cout << endl;
 
-        // cgi
         cout << "  cgi_bin.root: " << s.cgi_bin.root << endl;
         cout << "  cgi_bin.cgi_pass: " << s.cgi_bin.cgi_pass << endl;
         cout << "  cgi_bin.methods: "; printStringVector(s.cgi_bin.methods); cout << endl;
@@ -274,7 +295,7 @@ int main(int argc, char **argv)
                 serverSocket->listen(backlog);
 
                 std::cout << "Server listening on " << v_srv[j].v_listening[i].ip_addr 
-                          << ":" << v_srv[j].v_listening[i].Port << std::endl; // to be deleted
+                          << ":" << v_srv[j].v_listening[i].Port << std::endl;
 
                 eventHandler.addFd(serverSocket->getFd(), POLLIN);
                 serverSockets.push_back(serverSocket);
@@ -318,6 +339,7 @@ int main(int argc, char **argv)
                             close(fds[i].fd);
                             clientParsers.erase(fds[i].fd);
                             clientBuffers.erase(fds[i].fd);
+                            cout << "connection just closed for " << fds[i].fd << endl;
                         }
                     }
                 }
@@ -328,24 +350,22 @@ int main(int argc, char **argv)
     {
         std::cerr << "Server error: " << e.what() << std::endl;
         
-       
         for (size_t i = 0; i < serverSockets.size(); ++i)
         {
             delete serverSockets[i];
         }
+
+        while (v_srv.size() != 0)
+            v_srv.pop_back ();
         
-        // if (srv)
-        //     delete srv;
         return 1;
     }
     for (size_t i = 0; i < serverSockets.size(); ++i)
-       {
-           delete serverSockets[i];
-       }
-
-
-    // if (srv)
-    //     delete (srv);
+    {
+        delete serverSockets[i];
+    }
+     while (v_srv.size() != 0)
+            v_srv.pop_back ();
 
     return 0;
 }

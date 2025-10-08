@@ -1,6 +1,8 @@
 #include "../include/Parser.h"
 #include "../include/globals.h"
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 
 Parser::Parser(string s) : _configfilepath(s)
@@ -851,6 +853,22 @@ bool isdirectoryopened(string path)
     return (false);
 }
 
+bool validate_cgi_config(const Server *srv)
+{
+    // check cgi root directory exists
+    if (!isdirectoryopened(srv->cgi_bin.root))
+        return false;
+
+    struct stat st;
+    // check cgi_pass exists and is a regular executable file
+    if (stat(srv->cgi_bin.cgi_pass.c_str(), &st) != 0)
+        return false;
+    if (!S_ISREG(st.st_mode))
+        return false;
+    if (access(srv->cgi_bin.cgi_pass.c_str(), X_OK) != 0)
+        return false;
+    return true;
+}
 
 bool Parser::_ValidateData(Server *srv)
 {
@@ -915,6 +933,8 @@ bool Parser::_ValidateData(Server *srv)
         cerr << "cannot read " << srv->location_upload.index << "\n";
         return (false);
     }
+
+    // here add it
     return (true);
 }
 
@@ -1402,9 +1422,14 @@ bool Parser::_ValidateData_ ()
         }
     }
 
-    cout << "still need validating cgi in parsing\n";
-    cout << "still need validation for python || cgi_pass existence\n";
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    for (size_t i = 0; i < v_srv.size(); ++i)
+    {
+        if (!validate_cgi_config(&v_srv[i]))
+        {
+            cerr << "invalid cgi configuration for server " << i << "\n";
+            return (false);
+        }
+    }
 
     return (true);
 }

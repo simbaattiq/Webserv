@@ -349,6 +349,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
     bool is_upload_requested = false;
     bool is_error = false;
     string output="";
+    // size_t pos=-1;
 
 
     vector <string> v =  _split (_uri,'/' );
@@ -356,8 +357,8 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
     (void)response;
     int statuscode = 200;
 
-   cout <<  ( srv->location_upload.root)  << endl;
-    cout <<  ( srv->location_upload.index) << endl;
+//    cout <<  ( srv->location_upload.root)  << endl;
+//     cout <<  ( srv->location_upload.index) << endl;
     
 
 
@@ -371,7 +372,6 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
         {
             if (srv->location.autoindex)
             {
-                // generate autoindex for root
                 std::string html = make_autoindex_html(srv->location.root, "/");
                 response.addHeader("Content-Type", "text/html");
                 response.setBody(html);
@@ -496,7 +496,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
             }
         }
     }
-    else if (_uri.find("cgi-bin") != std::string::npos)
+    else if (v[0] == "cgi-bin")
     {
 
          if (!isMethodAuthorised(_method, srv->cgi_bin.methods ))
@@ -513,6 +513,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
         else
         {
                 iscgi = true;
+                
 
                 string scriptpath = _uri.substr(strlen("/cgi-bin/"));
                 size_t querypos = scriptpath.find('?');
@@ -1086,9 +1087,15 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response, const 
 
     if (!_headers["Connection"].empty())
     {
-        if (_headers["Connection"] == "close")
+        if (_headers["Connection"] == "close" || _headers["Connection"] == "CLOSE")
             response.Connection = response.CLOSE;
+        else if (_headers["Connection"] == "keep-alive" || _headers["Connection"] == "KEEP-ALIVE")
+            response.Connection = response.KEEP_ALIVE;
     }
+    else
+        response.Connection = response.CLOSE;
+
+    cout << "&&&&connection : "   <<  _headers["Connection"] << endl;
     return (true);
 }
 
