@@ -343,6 +343,17 @@ bool execute_cgi(string  & response, string arg, string path, const  Server *srv
 
 bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *srv)
 {
+    if (!srv->location.redirection.empty())
+    {
+        response.setStatus(StatusCodes::MOVED_PERMANENTLY,
+                           StatusCodes::getStatusMessage(StatusCodes::MOVED_PERMANENTLY));
+        // response.addHeader("Location", srv->location.redirection);
+        string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                StatusCodes::MOVED_PERMANENTLY,
+                           StatusCodes::getStatusMessage(StatusCodes::MOVED_PERMANENTLY));
+        response.setBody(body);
+        return true;
+    }
     string imagedata = "";
     bool isimagerequested = false;
     bool iscgi              =  false;
@@ -356,10 +367,6 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *
 
     (void)response;
     int statuscode = 200;
-
-//    cout <<  ( srv->location_upload.root)  << endl;
-//     cout <<  ( srv->location_upload.index) << endl;
-    
 
 
     if (_uri == "/")

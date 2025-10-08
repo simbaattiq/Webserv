@@ -52,6 +52,7 @@ class Server
             string index_content;
             bool autoindex;
             vector <string> methods;
+            string redirection;
     };
 
     class Location_Upload

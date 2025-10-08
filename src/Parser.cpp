@@ -203,6 +203,13 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
                 srv->location.methods.push_back(v_tmp[i]);
             }
         }
+        else if (v_location[i].find("return") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+            if (v_tmp.size() != 2 || v_tmp[0] != "return")
+                return (false);
+            srv->location.redirection = v_tmp[1];
+        }
         else
             return (false);
     }
@@ -279,6 +286,13 @@ bool Parser::IsLocationUploadExtracted(string Line, Server *srv)
                 return (false);
             srv->location_upload.upload_store =  v_tmp[1];
         }
+        // else if (v_location[i].find("return") != string::npos)
+        // {
+        //     v_tmp = _split(v_location[i], ' ');
+        //     if (v_tmp.size() != 2 || v_tmp[0] != "return")
+        //         return (false);
+        //     srv->location_upload.redirection = v_tmp[1];
+        // }
         else
             return (false);
     }
