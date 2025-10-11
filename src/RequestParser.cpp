@@ -184,6 +184,64 @@ bool RequestParser::parse(const std::string& raw_request)
     return true;
 }
 
+
+// bool RequestParser::_Extract_Request_Data(std::vector<std::string> v_request) {
+//     if (v_request.empty())
+//         return false;
+
+//     std::stringstream iss(v_request[0]);
+//     iss >> _method >> _uri >> _httpVersion;
+
+//     if (_method.empty() || _uri.empty() || _httpVersion.empty()) {
+//         std::cerr << "Invalid request line!" << std::endl;
+//         return false;
+//     }
+
+//     std::cout << "Method: " << _method << ", URI: " << _uri << ", HTTP Version: " << _httpVersion << std::endl;
+
+//     size_t i = 1;
+//     bool endofheaders = false;
+//     for (; i < v_request.size(); i++) {
+//         std::string line = v_request[i];
+
+//         if (line.empty()) {
+//             endofheaders = true;
+//             i++;
+//             break;
+//         }
+
+//         size_t pos = line.find(':');
+//         if (pos != std::string::npos) {
+//             std::string header_name = trim(line.substr(0, pos));
+//             std::string header_value = trim(line.substr(pos + 1));
+//             _headers[header_name] = header_value;
+//         }
+//     }
+
+//     // std::map<std::string, std::string>::iterator it;
+//     // for (it = _headers.begin(); it != _headers.end(); ++it) {
+//     //     // std::cout << "Header: " << it->first << " = " << it->second << std::endl;
+//     // }
+
+//     if (_method != "POST")
+//         return true;
+
+//     if (endofheaders && i < v_request.size()) {
+//         for (; i < v_request.size(); i++) {
+//             if (!_body.empty())
+//                 _body += '\n';
+//             _body += v_request[i];
+//         }
+//     } else {
+//         std::cout << "Header not closed properly\n";
+//         return false;
+//     }
+
+//     std::cout << "Body: " << _body << std::endl;
+//     return true;
+// }
+
+
 bool isFileAccessible(string s)
 {
     if (access(s.c_str(), F_OK) == 0)
@@ -720,6 +778,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response, const Server 
 {
     int statuscode = 400;
     string fullpath = "";
+    cout << "check post just called \n";
 
     if (_uri == "/upload")
     {
@@ -1011,9 +1070,6 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response, const Serve
     {
         if (!isMethodAuthorised(_method, srv->location_upload.methods ))
             statuscode = 405;
-
-
-
         /* we have an issue in this section */
 
         // // else if (!isFileAccessible("/var/www/" + _uri))
@@ -1091,7 +1147,6 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response, const 
         response.Method = response.ERROR;
         return (false);
     }
-
     if (!_headers["Connection"].empty())
     {
         if (_headers["Connection"] == "close" || _headers["Connection"] == "CLOSE")
@@ -1101,8 +1156,6 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response, const 
     }
     else
         response.Connection = response.CLOSE;
-
-    cout << "&&&&connection : "   <<  _headers["Connection"] << endl;
     return (true);
 }
 
