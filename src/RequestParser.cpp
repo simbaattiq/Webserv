@@ -1068,18 +1068,16 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response, const Serve
 
     else if (v_uri[0] == "uploads")
     {
+        cout << "in uploads  _uri is " << _uri << endl;
         if (!isMethodAuthorised(_method, srv->location_upload.methods ))
             statuscode = 405;
-        /* we have an issue in this section */
 
-        // // else if (!isFileAccessible("/var/www/" + _uri))
-        // else if (!isFileAccessible("/var/www/" + _uri))
-        // {
-        //     cout << "**404** : _uri: " << _uri << '\n';
-        //     statuscode = 404;
-        // }
-        // else if (!CanWeWriteFile("/var/www/" + _uri))
-        //     statuscode = 403;
+        else if (!isFileAccessible(srv->location_upload.root + '/' + v_uri[v_uri.size() - 1]))
+        {
+            statuscode = 404;
+        }
+        else if (!CanWeWriteFile(srv->location_upload.root ))
+            statuscode = 403;
 
 
         else if (!_isHttpSupported())
@@ -1090,7 +1088,6 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response, const Serve
     else
     {
         cout << "URL not found\n";
-        // cout << "V_URL[0]: ==> " << v_uri[0] << "\n";  
         statuscode = 400;
     }
 
