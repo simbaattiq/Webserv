@@ -290,9 +290,21 @@ int main(int argc, char **argv)
             for (size_t i = 0; i < v_srv[j].v_listening.size(); ++i)
             {
                 Socket* serverSocket = new Socket();
-                serverSocket->create();
-                serverSocket->bind(v_srv[j].v_listening[i].Port, v_srv[j].v_listening[i].ip_addr);
-                serverSocket->listen(backlog);
+
+                try
+                {
+                    serverSocket->create();
+                    serverSocket->bind(v_srv[j].v_listening[i].Port, v_srv[j].v_listening[i].ip_addr);
+                    serverSocket->listen(backlog);
+                }
+                catch (const std::exception& e) 
+                {
+                    if (serverSocket)
+                        delete serverSocket;
+                    std::cerr << "Error: " << e.what() << std::endl;
+
+                    throw std::runtime_error("Failed to set up  socket.");
+                }
 
                 std::cout << "Server listening on " << v_srv[j].v_listening[i].ip_addr 
                           << ":" << v_srv[j].v_listening[i].Port << std::endl;
