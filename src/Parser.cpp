@@ -1,5 +1,8 @@
 #include "../include/Parser.h"
+#include "../include/globals.h"
 #include <dirent.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 
 Parser::Parser(string s) : _configfilepath(s)
@@ -144,6 +147,8 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() != 2)
                 return (false);
+            if (v_tmp[0] != "root")
+                return (false);
             srv->location.root = v_tmp[1];
         }
         else if (v_location[i].find ("autoindex") != string::npos)
@@ -151,6 +156,9 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
             v_tmp = _split(v_location[i], ' ');
 
             if (v_tmp.size() != 2)
+                return (false);
+
+            if (v_tmp[0] != "autoindex")
                 return (false);
 
             v_tmp[1] = _string_ToUpper(v_tmp[1]);
@@ -173,6 +181,8 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() != 2)
                 return (false);
+            if (v_tmp[0] != "index")
+                return (false);
             srv->location.index =  v_tmp[1];
         }
         else if (v_location[i].find ("methods") != string::npos)
@@ -182,11 +192,23 @@ bool Parser::IsLocationExtracted(string Line, Server *srv)
 
             if (v_tmp.size() <= 1)
                 return (false);
+
+            if (v_tmp[0] != "methods")
+                return (false);
             
-            for (size_t i = 0; i < v_tmp.size(); i++)
+            for (size_t i = 1; i < v_tmp.size(); i++)
             {
+                if (v_tmp[i] != "GET" && v_tmp[i] != "POST" && v_tmp[i] != "DELETE")
+                    return (false);
                 srv->location.methods.push_back(v_tmp[i]);
             }
+        }
+        else if (v_location[i].find("return") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+            if (v_tmp.size() != 2 || v_tmp[0] != "return")
+                return (false);
+            srv->location.redirection = v_tmp[1];
         }
         else
             return (false);
@@ -212,6 +234,14 @@ bool Parser::IsLocationUploadExtracted(string Line, Server *srv)
             if (v_tmp.size() != 2)
                 return (false);
             srv->location_upload.root = v_tmp[1];
+        }
+        else if (v_location[i].find ("index") != string::npos)
+        {
+            v_tmp = _split(v_location[i], ' ');
+
+            if (v_tmp.size() != 2)
+                return (false);
+            srv->location_upload.index = v_tmp[1];
         }
         else if (v_location[i].find ("autoindex") != string::npos)
         {
@@ -256,6 +286,13 @@ bool Parser::IsLocationUploadExtracted(string Line, Server *srv)
                 return (false);
             srv->location_upload.upload_store =  v_tmp[1];
         }
+        // else if (v_location[i].find("return") != string::npos)
+        // {
+        //     v_tmp = _split(v_location[i], ' ');
+        //     if (v_tmp.size() != 2 || v_tmp[0] != "return")
+        //         return (false);
+        //     srv->location_upload.redirection = v_tmp[1];
+        // }
         else
             return (false);
     }
@@ -830,14 +867,25 @@ bool isdirectoryopened(string path)
     return (false);
 }
 
+bool validate_cgi_config(const Server *srv)
+{
+    // check cgi root directory exists
+    if (!isdirectoryopened(srv->cgi_bin.root))
+        return false;
+
+    struct stat st;
+    // check cgi_pass exists and is a regular executable file
+    if (stat(srv->cgi_bin.cgi_pass.c_str(), &st) != 0)
+        return false;
+    if (!S_ISREG(st.st_mode))
+        return false;
+    if (access(srv->cgi_bin.cgi_pass.c_str(), X_OK) != 0)
+        return false;
+    return true;
+}
 
 bool Parser::_ValidateData(Server *srv)
 {
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
-    cout << "validate data:\n";
-
-
-
     if (srv->listening.ip_addr.empty() || srv->listening.Port==-1)
     {
         cerr << "cannot read ip adress and port \n";
@@ -846,7 +894,7 @@ bool Parser::_ValidateData(Server *srv)
 
 
 
-     srv->error.error.html_content = _ReadData(srv->error.error.html_path);
+    srv->error.error.html_content = _ReadData(srv->error.error.html_path);
 
     if (srv->error.error.html_content.empty())
     {
@@ -891,41 +939,540 @@ bool Parser::_ValidateData(Server *srv)
         return (false);
     }
 
+    srv->location_upload.index_content = _ReadData(srv->location_upload.root + "/" + 
+           srv->location_upload.index );
 
-    cout << "still need validating cgi in parsing\n";
-    cout << "still need validation for python || cgi_pass existence\n";
-    cout << "\n%%%%%%%%%%%%%%%%%%%%%%%%\n\n";
+    if (srv->location_upload.index_content.empty())
+    {
+        cerr << "cannot read " << srv->location_upload.index << "\n";
+        return (false);
+    }
+
+    // here add it
     return (true);
 }
 
-Server *Parser::Parse()
+
+
+
+
+// start new parsing server;
+
+bool find_location_bound(unsigned int &i, unsigned int &j, unsigned int &i_row, 
+                        unsigned int &j_row, vector<string> _conf_line, 
+                        int index, const string& location_type)
 {
+    int count_left = 0;
+    int count_right = 0;
+    int left_start = -1;
+    int right_start = -1;
+    bool isleftfound = false;
+
+    (void)right_start;
+    (void)location_type;
+
+
+    for (size_t z = index; z < _conf_line.size(); z++)
+    {
+        size_t left = _conf_line[z].find('{');
+        
+        if (left != std::string::npos)
+        {
+            count_left++;
+            if (!isleftfound)
+            {
+                left_start = left;
+                i_row = z;
+            }
+            isleftfound = true;
+        }
+
+        size_t right = _conf_line[z].find('}');
+        
+        if (right != std::string::npos)
+        {
+            count_right++;
+            j_row = z;
+        }
+
+        if (count_left > 0 && count_left == count_right)
+        {
+            i = left_start;
+            j = right;
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool Parser::_ExtractServerContent(vector<string> &server_content, Server *srv)
+{
+    string line = "";
+    string tmp =  "";
+    
+    for (size_t i = 0; i < server_content.size(); i++)
+    {
+        line = server_content[i];
+        
+        if (line.find("listen") != string::npos)
+        {
+            while ((_find_char_position(line, ';') == -1))
+            {
+
+               return (false);
+            }
+            int tmpnb = _find_char_position(line, ';');
+
+            if (tmpnb == -1)
+                return (false);
+
+            tmp = &line[tmpnb + 1];
+            line = line .substr(0, line.find_last_of(';'));
+
+            line  = line.substr(_find_word((char *)line.c_str(), "listen") + 1, line.length());
+            vector <string> listen = _split(line, ':');
+
+            if (listen.size() != 2)
+                return (false);
+
+            listen[0] = _trim(listen[0]);
+            listen[1] = _trim(listen[1]);
+
+            srv->listening.ip_addr = listen[0];
+            srv->listening.Port = atoi (listen[1].c_str());
+        
+            if (!_is_Valide_ipaddress(listen[0]))
+                return (false);
+
+            if (!_Validate_Ports(listen[1]) )
+                return (false);
+
+            Server::Listening l;
+            l.ip_addr = listen[0];
+
+            l.Port  = atoi (listen[1].c_str());
+            srv->v_listening.push_back (l);
+        }
+        else if (line.find("error_page") != string::npos)
+        {
+            while ((_find_char_position(line, ';') == -1))
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            int tmpnb = _find_char_position(line, ';');
+            tmp = &line[tmpnb + 1];
+            line = line .substr(0, line.find_last_of(';'));
+
+            line  = line.substr(_find_word((char *)line.c_str(), "error_page") + 1, line.length());
+            vector <string> error_page = _split(line, ' ');
+
+            Server::sterror error;
+
+            if (error_page.size() != 1)
+                return (false);
+
+            srv->error.error.html_path = error_page[0];
+
+            vector <string> v_tmp = _split(error_page[0], '/');
+
+            if (v_tmp.size() > 1)
+                srv->error.error.index = v_tmp[v_tmp.size() - 1];
+            else
+                srv->error.error.index = error_page[0];
+
+        }
+        else if (line.find("client_max_body_size") != string::npos)
+        {
+           while ((_find_char_position(line, ';') == -1))
+            {
+                if ( (i + 1) < _conf_line.size())
+                {
+                    line += _conf_line[i + 1];
+                    i++;
+                }
+                else
+                    return (false);
+            }
+            int tmpnb = _find_char_position(line, ';');
+
+            tmp = &line[tmpnb + 1];
+            line = line .substr(0, line.find_last_of(';'));
+
+            line  = line.substr(_find_word((char *)line.c_str(), "client_max_body_size") + 1, line.length());
+
+            vector <string> body_size = _split(line, ' ');
+            
+            if (body_size.size() != 1)
+                return (false);
+
+            _trim(body_size[0]);
+            if (!_check_max_body_size(body_size[0]))
+                return (false);
+            srv->max_body_size = atoi(body_size[0].c_str());
+        }
+        else if (line.find("location /upload") != string::npos)
+        {
+
+            unsigned int left = 0, right = 0, left_row = 0, right_row = 0;
+        
+            if (!find_location_bound(left, right, left_row, right_row, server_content, i, "upload"))
+            {
+                return false;
+            }
+            vector<string> upload_content;
+            for (unsigned int row = left_row; row <= right_row; row++)
+            {
+                string content_line = server_content[row];
+                if (row == left_row)
+                {
+                    if (left < content_line.length())
+                        content_line = content_line.substr(left + 1);
+                }
+                if (row == right_row)
+                {
+                    if (right < content_line.length())
+                        content_line = content_line.substr(0, right);
+                }
+                if (!content_line.empty())
+                    upload_content.push_back(content_line);
+            }
+
+            string upload_line = "";
+            for (size_t k = 0; k < upload_content.size(); k++)
+            {
+                upload_line += upload_content[k] + " ";
+            }
+
+            upload_line = _trim(upload_line);
+            
+            if (!IsLocationUploadExtracted(upload_line, srv))
+            {
+                cout << "failed to extract upload location\n";
+                return false;
+            }
+        
+            i = right_row;
+        }
+
+         else if (line.find("location /cgi-bin") != string::npos)
+        {
+            unsigned int left = 0, right = 0, left_row = 0, right_row = 0;
+        
+            if (!find_location_bound(left, right, left_row, right_row, server_content, i, "upload"))
+            {
+                return false;
+            }
+            vector<string> cgi_content;
+            for (unsigned int row = left_row; row <= right_row; row++)
+            {
+                string content_line = server_content[row];
+                if (row == left_row)
+                {
+                    if (left < content_line.length())
+                        content_line = content_line.substr(left + 1);
+                }
+                if (row == right_row)
+                {
+                    if (right < content_line.length())
+                        content_line = content_line.substr(0, right);
+                }
+                if (!content_line.empty())
+                    cgi_content.push_back(content_line);
+            }
+
+            string cgi_line = "";
+            for (size_t k = 0; k < cgi_content.size(); k++)
+            {
+                cgi_line += cgi_content[k] + " ";
+            }
+            cgi_line = _trim(cgi_line);
+
+            if (!IsLocationCGIExtracted(cgi_line, srv))
+            {
+                return (false);
+            }
+
+            i = right_row;
+        }
+
+        else if (line.find("location /images") != string::npos)
+        {
+
+
+            unsigned int left = 0, right = 0, left_row = 0, right_row = 0;
+        
+            if (!find_location_bound(left, right, left_row, right_row, server_content, i, "images"))
+            {
+                return false;
+            }
+            vector<string> images_content;
+            for (unsigned int row = left_row; row <= right_row; row++)
+            {
+                string content_line = server_content[row];
+                if (row == left_row)
+                {
+                    if (left < content_line.length())
+                        content_line = content_line.substr(left + 1);
+                }
+                if (row == right_row)
+                {
+                    if (right < content_line.length())
+                        content_line = content_line.substr(0, right);
+                }
+                if (!content_line.empty())
+                    images_content.push_back(content_line);
+            }
+
+            string images_line = "";
+            for (size_t k = 0; k < images_content.size(); k++)
+            {
+                images_line += images_content[k] + " ";
+            }
+            images_line = _trim(images_line);
+            i = right_row;
+           
+
+            if (!IsLocationImgExtracted(images_line, srv))
+                return (false);
+        }
+
+        else if (line.find("location /") != string::npos)
+        {
+            unsigned int left = 0, right = 0, left_row = 0, right_row = 0;
+        
+            if (!find_location_bound(left, right, left_row, right_row, server_content, i, "location /"))
+            {
+                return false;
+            }
+            vector<string> location_content;
+            for (unsigned int row = left_row; row <= right_row; row++)
+            {
+                string content_line = server_content[row];
+                if (row == left_row)
+                {
+                    if (left < content_line.length())
+                        content_line = content_line.substr(left + 1);
+                }
+                if (row == right_row)
+                {
+                    if (right < content_line.length())
+                        content_line = content_line.substr(0, right);
+                }
+                if (!content_line.empty())
+                    location_content.push_back(content_line);
+            }
+
+            string location_line = "";
+            for (size_t k = 0; k < location_content.size(); k++)
+            {
+                location_line += location_content[k] + " ";
+            }
+            location_line = _trim(location_line);
+
+            i = right_row;
+            location_line = _trim(location_line);
+
+            if (!IsLocationExtracted(location_line, srv))
+            {
+                cout << "location cannot be extracted\n";
+                return (false);
+            }
+        }
+
+        else 
+        {
+
+            for (size_t j = 0; j < line.length(); j++)
+            {
+                if (!isspace(_conf_line[i][j]) && _conf_line[i][j] != '{' && _conf_line[i][j] != '}'
+                                    &&   _conf_line[i][j] != '\0')
+                {
+                    cout << "unkown config\n";
+                    return (false);
+                }
+                    
+            }
+        }
+    }
+    
+    return true;
+}
+
+bool find_server_bound (unsigned  int &i, unsigned int &j, unsigned int &i_row, 
+                unsigned int &j_row ,vector <string> _conf_line, int index)
+{
+    
+    int count_left = 0;
+    int count_right = 0;
+    int left_start = -1;
+    int right_start = -1;
+    bool isleftfound = false;
+
+
+    for (size_t z = index; z < _conf_line.size(); z++)
+    {
+        size_t left = _conf_line[z].find('{');
+
+        if (left != std::string::npos)
+        {
+
+            count_left++;
+            if (!isleftfound)
+            {
+                left_start = left;
+                i_row = z;
+            }
+            isleftfound = true;
+        }
+
+        size_t right = _conf_line[z].find('}');
+
+        if (right != std::string::npos)
+        {
+            count_right++;
+
+            j_row = z;
+        }
+
+        if (count_left > 0 && count_left == count_right)
+        {
+            i = left_start;
+            j = right;
+            return (true);
+        }
+    }
+
+    (void)right_start;
+    return (false);
+}
+
+bool Parser::_ExtractData_( )
+{
+    string tmp = "";
+    string line = "";
+    bool isserverfound = false; (void)isserverfound;
+    Server srv;
+
+    for (size_t i = 0; i < _conf_line.size(); i++)
+    {
+        line = tmp +  _conf_line[i];
+
+        if  ( _conf_line[i].find("server") != std::string::npos)
+        {
+            unsigned int left = -1, right = -1, left_row = -1, right_row = -1;
+
+            if (!find_server_bound(left, right, left_row, right_row , _conf_line, i))
+            {
+                cout << "server not closed properly\n";
+                return (false);
+            }
+
+            vector<string> server_content;
+            
+            
+            for (unsigned int row = left_row; row <= right_row; row++)
+            {
+                string content_line = _conf_line[row];
+                
+                if (row == left_row)
+                {
+                    if (left < content_line.length())
+                        content_line = content_line.substr(left + 1);
+                    else
+                        content_line = "";
+                }
+                
+                if (row == right_row)
+                {
+                    if (right < content_line.length())
+                        content_line = content_line.substr(0, right);
+                }
+                
+                string trimmed = _trim(content_line);
+                if (!trimmed.empty())
+                    server_content.push_back(trimmed);
+            }
+
+            
+            Server new_server;
+            if (_ExtractServerContent(server_content, &new_server))
+            {
+                v_srv.push_back(new_server);
+                cout << "Server extracted successfully\n";
+            }
+            else
+            {
+                cout << "Failed to extract server content\n";
+                return (false);
+            }
+            i = right_row;
+        }
+        
+    }
+    return (true);
+}
+
+bool Parser::_ValidateData_ ()
+{
+    if (v_srv.empty())
+    {
+        cout << "no server to validate\n";
+        return (false);
+    }
+
+
+    for (size_t i = 0; i < v_srv.size(); i++)
+    {
+        if (!_ValidateData(&v_srv[i]))
+        {
+            return (false);
+        }
+    }
+
+    for (size_t i = 0; i < v_srv.size(); ++i)
+    {
+        if (!validate_cgi_config(&v_srv[i]))
+        {
+            cerr << "invalid cgi configuration for server " << i << "\n";
+            return (false);
+        }
+    }
+
+    return (true);
+}
+
+
+vector <Server> Parser::getServers()
+{
+    v_srv.clear();
+
     if (!_isFileOpend())
-        return (NULL);
+        return v_srv.clear(), v_srv;
 
     if (!_ReadData())
-        return (NULL);
+        return v_srv.clear(), v_srv;
 
-    Server *srv  = new Server();
+    if (!_ExtractData_())
+    {
+        cout << "data not extracted \n";
+        return v_srv.clear(), v_srv;
+    }
 
-    srv->listening.ip_addr = "";
-    srv->listening.Port=-1;
-    srv->cgi_bin.htmlcontent = "";
-    
-    if (!_ExtractData(srv))
+    if (!_ValidateData_())
     {
-        if (srv)
-            delete srv;
-        return (NULL); 
+        cout << "data not validated \n";
+        return v_srv.clear(), v_srv;
     }
-       
-    if (!_ValidateData(srv))
-    {
-         if (srv)
-            delete srv;
-        return (NULL); 
-    }
-    return ( srv );
+    return v_srv;
 }
+
+// end updating parser;
 
 Parser::~Parser() {}

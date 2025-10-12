@@ -20,6 +20,7 @@ class Parser
       bool _ReadData();
       string  _ReadData(string s);
       bool _ValidateData(Server *srv);
+      bool _ValidateData_ ();
       bool _ExtractData(Server *srv);
       vector <string> _conf_line;
       string _trim(const std::string& str);
@@ -31,11 +32,14 @@ class Parser
      bool  _is_Valide_ipaddress(string ip);
      bool   _Validate_Ports( string s);
      bool _isserver_closed(size_t startindex, string &tmp);
+     bool _ExtractServerContent(vector<string> &server_content, Server *srv);
+     bool _ExtractData_( );
      
 
     public :
       std::vector<std::string> _split(const std::string& str, char delimiter);
       Parser (string s);
+      vector <Server > getServers ();
       Server *Parse ();
       void v_clear();
       ~Parser ();

@@ -31,4 +31,8 @@ curl -X POST http://localhost:8080/upload \
 curl -X DELETE http://localhost:8080/var/www/uploads/upl00.txt \
      -H "Host: localhost" \
 
+ curl -v -X POST http://127.0.0.1:8080/cgi-bin/test_cgi.py 
+  --http1.1 -H "Content-Type: application/x-www-form-urlencoded"
+  -d "msg=Achraf"  -H  "Content-Length: 10"
+
 

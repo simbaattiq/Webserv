@@ -10,6 +10,7 @@
 #include <cstring>
 #include <arpa/inet.h>
 #include <queue>
+#include <cstdlib>
 
 using namespace std;
 
@@ -23,6 +24,7 @@ class Server
         struct sterror
         {
            string html_path;
+           string index;
            string html_content;
         };
 
@@ -50,6 +52,7 @@ class Server
             string index_content;
             bool autoindex;
             vector <string> methods;
+            string redirection;
     };
 
     class Location_Upload
@@ -58,7 +61,9 @@ class Server
             string root;
             string upload_store;
             bool autoindex;
+            string index;
             vector <string> methods;
+            string index_content;
     };
 
     class Location_Images
@@ -85,6 +90,7 @@ class Server
 
 
     Server();
+    Server& operator=(const Server& other);
     Listening listening; // will be deleted;
     vector <Listening > v_listening; // new one;
     Error     error;
@@ -96,6 +102,7 @@ class Server
     int     server_fd;
     bool Setup();
     string ReadRequest(int client_Id);
+    static Server* select_correspondent_server ( std::string host);
 
 };
 

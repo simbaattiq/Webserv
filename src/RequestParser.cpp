@@ -3,6 +3,10 @@
 #include <iostream>
 #include <algorithm>
 #include "StatusCodes.hpp"
+#include <dirent.h>
+#include <sys/stat.h>
+#include <ctime>
+#include <iomanip>
 
 
 RequestParser::RequestParser() {
@@ -180,6 +184,64 @@ bool RequestParser::parse(const std::string& raw_request)
     return true;
 }
 
+
+// bool RequestParser::_Extract_Request_Data(std::vector<std::string> v_request) {
+//     if (v_request.empty())
+//         return false;
+
+//     std::stringstream iss(v_request[0]);
+//     iss >> _method >> _uri >> _httpVersion;
+
+//     if (_method.empty() || _uri.empty() || _httpVersion.empty()) {
+//         std::cerr << "Invalid request line!" << std::endl;
+//         return false;
+//     }
+
+//     std::cout << "Method: " << _method << ", URI: " << _uri << ", HTTP Version: " << _httpVersion << std::endl;
+
+//     size_t i = 1;
+//     bool endofheaders = false;
+//     for (; i < v_request.size(); i++) {
+//         std::string line = v_request[i];
+
+//         if (line.empty()) {
+//             endofheaders = true;
+//             i++;
+//             break;
+//         }
+
+//         size_t pos = line.find(':');
+//         if (pos != std::string::npos) {
+//             std::string header_name = trim(line.substr(0, pos));
+//             std::string header_value = trim(line.substr(pos + 1));
+//             _headers[header_name] = header_value;
+//         }
+//     }
+
+//     // std::map<std::string, std::string>::iterator it;
+//     // for (it = _headers.begin(); it != _headers.end(); ++it) {
+//     //     // std::cout << "Header: " << it->first << " = " << it->second << std::endl;
+//     // }
+
+//     if (_method != "POST")
+//         return true;
+
+//     if (endofheaders && i < v_request.size()) {
+//         for (; i < v_request.size(); i++) {
+//             if (!_body.empty())
+//                 _body += '\n';
+//             _body += v_request[i];
+//         }
+//     } else {
+//         std::cout << "Header not closed properly\n";
+//         return false;
+//     }
+
+//     std::cout << "Body: " << _body << std::endl;
+//     return true;
+// }
+
+
 bool isFileAccessible(string s)
 {
     if (access(s.c_str(), F_OK) == 0)
@@ -272,13 +334,11 @@ bool _isFileOpend (string filename)
 }
 
 
-bool execute_cgi(string  & response, string arg, string path)
+bool execute_cgi(string  & response, string arg, string path, const  Server *srv)
 {
     pid_t pid  ;
     int fd[2];
     int status = 200;
-    // int stdin = dup (  STDIN_FILENO);
-    // int stdout = dup (  STDOUT_FILENO);
 
     path = srv->cgi_bin.root + '/' + path;
 
@@ -288,7 +348,7 @@ bool execute_cgi(string  & response, string arg, string path)
 
         if (pipe(fd) == -1)
         {
-            status = 500; // internal;
+            status = 500;
             return (false);
         }
 
@@ -339,12 +399,105 @@ bool execute_cgi(string  & response, string arg, string path)
 }
 
 
-bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Get_Method(ResponseBuilder & response, const Server *srv)
 {
+    // // Handle directories and index files
+
+    std::string fullpath = srv->location.root + _uri;
+    std::string checkPath = fullpath;
+    if (_uri.size() > 1 && _uri[_uri.size() - 1] == '/') {
+        checkPath = fullpath.substr(0, fullpath.size() - 1);
+    }
+
+    if (isDirectory(checkPath))
+    {
+        if (!isMethodAuthorised(_method, srv->location.methods))
+        {
+            response.setStatus(405, "Method Not Allowed");
+            response.addHeader("Content-Type", "text/html");
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                            405, "Method Not Allowed");
+            response.setBody(body);
+            return false;
+        }
+        
+        std::string indexPath = checkPath + "/" + srv->location.index;
+        if (CanWeReadAFile(indexPath))
+        {
+            std::ifstream file(indexPath.c_str(), std::ios::binary);
+            if (file.is_open())
+            {
+                std::ostringstream ss;
+                ss << file.rdbuf();
+                response.setStatus(200, "OK");
+                
+                std::string contentType = "text/html";
+                if (indexPath.find(".css") != std::string::npos)
+                    contentType = "text/css";
+                else if (indexPath.find(".js") != std::string::npos)
+                    contentType = "application/javascript";
+                else if (indexPath.find(".jpg") != std::string::npos || 
+                         indexPath.find(".jpeg") != std::string::npos)
+                    contentType = "image/jpeg";
+                else if (indexPath.find(".png") != std::string::npos)
+                    contentType = "image/png";
+                
+                response.addHeader("Content-Type", contentType);
+                response.setBody(ss.str());
+                file.close();
+                return true;
+            }
+        }
+        
+        if (srv->location.autoindex)
+        {
+            std::string dirListingHtml = make_autoindex_html(checkPath, _uri);
+            if (!dirListingHtml.empty()) {
+                response.setStatus(200, "OK");
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(dirListingHtml);
+                return true;
+            }
+            else
+            {
+                response.setStatus(403, "Forbidden");
+                response.addHeader("Content-Type", "text/html");
+                string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                            403, "Forbidden");
+                response.setBody(body);
+                return false;
+            }
+        }
+        else
+        {
+            response.setStatus(403, "Forbidden");
+            response.addHeader("Content-Type", "text/html");
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                        403, "Forbidden");
+            response.setBody(body);
+            return false;
+        }
+    }
+    ///////////
+
+    if (!srv->location.redirection.empty())
+    {
+        response.setStatus(StatusCodes::MOVED_PERMANENTLY,
+                           StatusCodes::getStatusMessage(StatusCodes::MOVED_PERMANENTLY));
+        // response.addHeader("Location", srv->location.redirection);
+        string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                StatusCodes::MOVED_PERMANENTLY,
+                           StatusCodes::getStatusMessage(StatusCodes::MOVED_PERMANENTLY));
+        response.setBody(body);
+        return true;
+    }
     string imagedata = "";
     bool isimagerequested = false;
     bool iscgi              =  false;
+    bool is_upload_requested = false;
+    bool is_error = false;
     string output="";
+    // size_t pos=-1;
 
 
     vector <string> v =  _split (_uri,'/' );
@@ -360,13 +513,107 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
         else if (!isFileAccessible(srv->location.root))
             statuscode = 404;
         else if (!CanWeReadAFile(srv->location.root + '/'  + srv->location.index))
-            statuscode = 403;
+        {
+            if (srv->location.autoindex)
+            {
+                std::string dirListingHtml = make_autoindex_html(srv->location.root, _uri);
+                if (!dirListingHtml.empty())
+                {
+                    response.setStatus(200, "OK");
+                    response.addHeader("Content-Type", "text/html");
+                    response.setBody(dirListingHtml);
+                    return true;
+                }
+                else
+                {
+                    response.setStatus(403, "Forbidden");
+                    response.addHeader("Content-Type", "text/html");
+                    response.setBody("<html><body><h1>403 Forbidden</h1><p>Permission denied.</p></body></html>");
+                    return false;
+                }
+            }
+            else
+            {
+                response.setStatus(403, "Forbidden");
+                response.addHeader("Content-Type", "text/html");
+                response.setBody("<html><body><h1>403 Forbidden</h1><p>Directory listing not allowed.</p></body></html>");
+                return false;
+            }
+        }
         else if (!_isHttpSupported())
             statuscode = 505;
         else if (!isHeaderNameExist("Host", _headers))
             statuscode = 400;
 
         cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri == ('/' + srv->location.root) || _uri == ('/' + srv->location.index) || 
+    _uri == ('/' + srv->location.root)  + ('/' + srv->location.index) )
+    {
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location.root + '/'   + srv->location.index))
+        {
+            if (srv->location.autoindex)
+            {
+                std::string html = make_autoindex_html(srv->location.root, "/");
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(html);
+                response.setStatus(200, "OK");
+                return true;
+            }
+            statuscode = 403;
+        }
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri == ('/' +  srv->location_upload.root) || _uri == ('/' + srv->location_upload.index) || 
+    _uri == ( srv->location_upload.root)  + ('/' + srv->location_upload.index) )
+    {
+        is_upload_requested = true;
+        if (!isMethodAuthorised(_method, srv->location_upload.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->location_upload.root))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->location_upload.root + '/'   + srv->location_upload.index))
+        {
+            if (srv->location_upload.autoindex)
+            {
+                std::string html = make_autoindex_html(srv->location_upload.root, ("/" + srv->location_upload.root));
+                response.addHeader("Content-Type", "text/html");
+                response.setBody(html);
+                response.setStatus(200, "OK");
+                return true;
+            }
+            statuscode = 403;
+        }
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
+        cout << "status code for " << _uri << " is " << statuscode << endl;
+    }
+    else if (_uri ==  ( '/' + srv->error.error.html_path) || _uri == ('/' + srv->error.error.index) )
+    {
+        is_error = true;
+        if (!isMethodAuthorised(_method, srv->location.methods ))
+            statuscode = 405;
+        else if (!isFileAccessible(srv->error.error.html_path))
+            statuscode = 404;
+        else if (!CanWeReadAFile(srv->error.error.html_path ))
+            statuscode = 403;
+        else if (!_isHttpSupported())
+            statuscode = 505;
+        else if (!isHeaderNameExist("Host", _headers))
+            statuscode = 400;
+
     }
     else if (v[0] == "images")
     {   
@@ -409,7 +656,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             }
         }
     }
-    else if (_uri.find("cgi-bin") != std::string::npos)
+    else if (v[0] == "cgi-bin")
     {
 
          if (!isMethodAuthorised(_method, srv->cgi_bin.methods ))
@@ -425,9 +672,8 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
 
         else
         {
-
-        
                 iscgi = true;
+                
 
                 string scriptpath = _uri.substr(strlen("/cgi-bin/"));
                 size_t querypos = scriptpath.find('?');
@@ -463,7 +709,7 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
                     }
                     else
                     {
-                        if (execute_cgi(output, v_arg[1], scriptpath))
+                        if (execute_cgi(output, v_arg[1], scriptpath, srv))
                         {
                             cout << "execution pass\n";
                         }
@@ -523,12 +769,22 @@ bool RequestParser::_Check_Get_Method(ResponseBuilder & response)
             response.setBody(body);
 
         }
+        else if (is_upload_requested)
+        {
+            is_upload_requested = false;
+            response.setBody(srv->location_upload.index_content);
+        }
+        else if (is_error)
+        {
+            is_error = false;
+            string body = response.Replace_html_error_message(srv->error.error.html_content, 
+                                200, "OK");
+            response.setBody(body);
+        }
         else
         {
-            response.addHeader("Content-Type", "text/html");
             response.setBody(srv->location.index_content);
-        }
-        
+        }        
     }
 
     else
@@ -579,7 +835,7 @@ bool RequestParser::saveBodyToFile(const string filepath)
     return (true);
 }
 
-bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
+bool RequestParser::handleUploadData( int & statuscode, string &fullpath, const Server *srv)
 {
     try
     {
@@ -613,10 +869,11 @@ bool RequestParser::handleUploadData( int & statuscode, string &fullpath)
 
 
 // new updated method
-bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Post_Method(ResponseBuilder & response, const Server *srv)
 {
     int statuscode = 400;
     string fullpath = "";
+    cout << "check post just called \n";
 
     if (_uri == "/upload")
     {
@@ -718,7 +975,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
                 else
                 {
                     // regular POST data as before
-                    if (handleUploadData(statuscode, fullpath)) 
+                    if (handleUploadData(statuscode, fullpath, srv)) 
                     {
                         // Success
                     }
@@ -790,7 +1047,7 @@ bool RequestParser::_Check_Post_Method(ResponseBuilder & response)
                     if (v_arg.size() == 2 && v_arg[0] == "msg")
                     {
 
-                        if (execute_cgi(cgi_output, v_arg[1], scriptpath))
+                        if (execute_cgi(cgi_output, v_arg[1], scriptpath, srv))
                         {
                             statuscode = 200;
                             response.setBody(cgi_output);
@@ -865,7 +1122,7 @@ string AssembleWord(vector < string > v_uri, string wordtonotadd)
     return (path);
 }
 
-bool RequestParser::_Delete_Content(vector < string > v_uri)
+bool RequestParser::_Delete_Content(vector < string > v_uri, const Server *srv)
 {
     try
     {
@@ -891,40 +1148,31 @@ bool RequestParser::_Delete_Content(vector < string > v_uri)
 
 
 
-bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
+bool RequestParser::_Check_Delete_Method(ResponseBuilder & response, const Server *srv)
 {
 
     (void)response;
     int statuscode = 200;
 
-
-    cout << "****************uri  : "  <<   _uri << endl;
-
     Parser prs ("");
     vector <string > v_uri =prs. _split(_uri, '/');
 
-    
     if (v_uri.size() <= 1)
         statuscode=400;
     
 
     else if (v_uri[0] == "uploads")
     {
+        cout << "in uploads  _uri is " << _uri << endl;
         if (!isMethodAuthorised(_method, srv->location_upload.methods ))
             statuscode = 405;
 
-
-
-        /* we have an issue in this section */
-
-        // // else if (!isFileAccessible("/var/www/" + _uri))
-        // else if (!isFileAccessible("/var/www/" + _uri))
-        // {
-        //     cout << "**404** : _uri: " << _uri << '\n';
-        //     statuscode = 404;
-        // }
-        // else if (!CanWeWriteFile("/var/www/" + _uri))
-        //     statuscode = 403;
+        else if (!isFileAccessible(srv->location_upload.root + '/' + v_uri[v_uri.size() - 1]))
+        {
+            statuscode = 404;
+        }
+        else if (!CanWeWriteFile(srv->location_upload.root ))
+            statuscode = 403;
 
 
         else if (!_isHttpSupported())
@@ -935,7 +1183,6 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
     else
     {
         cout << "URL not found\n";
-        // cout << "V_URL[0]: ==> " << v_uri[0] << "\n";  
         statuscode = 400;
     }
 
@@ -945,7 +1192,7 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
 
     if (statuscode == 200)
     {
-        if (!_Delete_Content(v_uri))
+        if (!_Delete_Content(v_uri, srv))
         {
             statuscode = 500;
         }
@@ -965,24 +1212,26 @@ bool RequestParser::_Check_Delete_Method(ResponseBuilder & response)
 
 
 
-bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
+bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response, const Server *srv)
 {
+
+    cout << "hey from validate data for response \n";
 
     if (_method == "GET")
     {
         response.Method = response.GET;
-        _Check_Get_Method(response);
+        _Check_Get_Method(response, srv);
         
     }
     else if (_method == "DELETE")
     {
         response.Method = response.DELETE;
-        _Check_Delete_Method(response);
+        _Check_Delete_Method(response, srv);
     }
     else if (_method == "POST")
     {
         response.Method = response.POST;
-        _Check_Post_Method(response);
+        _Check_Post_Method(response, srv);
     }
     else
     {
@@ -990,12 +1239,15 @@ bool   RequestParser:: ValidateDataForResponse(ResponseBuilder &response)
         response.Method = response.ERROR;
         return (false);
     }
-
     if (!_headers["Connection"].empty())
     {
-        if (_headers["Connection"] == "close")
+        if (_headers["Connection"] == "close" || _headers["Connection"] == "CLOSE")
             response.Connection = response.CLOSE;
+        else if (_headers["Connection"] == "keep-alive" || _headers["Connection"] == "KEEP-ALIVE")
+            response.Connection = response.KEEP_ALIVE;
     }
+    else
+        response.Connection = response.CLOSE;
     return (true);
 }
 
@@ -1010,6 +1262,17 @@ const std::string& RequestParser::getUri() const { return _uri; }
 const std::string& RequestParser::getHttpVersion() const { return _httpVersion; }
 
 const std::map<std::string, std::string>& RequestParser::getHeaders() const { return _headers; }
+
+const std::string RequestParser::getHeader(std::string name) 
+{
+    for (std::map<std::string, std::string>::const_iterator it = _headers.begin(); it != _headers.end(); ++it)
+    {
+        if (it->first == name)
+            return (it->second);
+    }
+    return ("");
+}
+
 
 const std::string& RequestParser::getBody() const { return _body; }
 
@@ -1111,4 +1374,201 @@ void RequestParser::parseMultipartParts(const std::string& boundary)
         
         pos = nextPos;
     }
+}
+
+std::string html_escape(const std::string &in)
+{
+    std::string out;
+    for (size_t i = 0; i < in.size(); ++i) {
+        unsigned char c = in[i];
+        switch (c) {
+            case '&': out += "&amp;"; break;
+            case '<': out += "&lt;"; break;
+            case '>': out += "&gt;"; break;
+            case '"': out += "&quot;"; break;
+            case '\'': out += "&#39;"; break;
+            default: out.push_back(c);
+        }
+    }
+    return out;
+}
+
+// std::string RequestParser::make_autoindex_html(const std::string &dirpath, const std::string &request_path)
+// {
+//     std::ostringstream rows;
+//     DIR *d = opendir(dirpath.c_str());
+//     if (d)
+//     {
+//         struct dirent *ent;
+//         while ((ent = readdir(d)) != NULL)
+//         {
+//             std::string name(ent->d_name);
+//             if (name == ".") continue;
+//             std::string href = name;
+//             std::string display = name;
+//             std::string sizeStr = "-";
+//             std::string mtimeStr = "-";
+//             struct stat st;
+//             std::string full = dirpath + "/" + name;
+//             if (stat(full.c_str(), &st) == 0)
+//             {
+//                 if (S_ISDIR(st.st_mode))
+//                 {
+//                     href += "/";
+//                     display += "/";
+//                 }
+//                 else
+//                 {
+//                     std::ostringstream ss;
+//                     double sz = static_cast<double>(st.st_size);
+//                     const char* units[] = {"B","KB","MB","GB"};
+//                     int ui = 0;
+//                     while (sz >= 1024.0 && ui < 3) { sz /= 1024.0; ++ui; }
+//                     ss << std::fixed << std::setprecision(sz>=100.0?0:1) << sz << " " << units[ui];
+//                     sizeStr = ss.str();
+//                     char buf[64];
+//                     std::tm tm;
+//                     localtime_r(&st.st_mtime, &tm);
+//                     strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M", &tm);
+//                     mtimeStr = buf;
+//                 }
+//             }
+//             std::string esc = html_escape(display);
+//             rows << "<tr><td data-key=\"name\"><a href=\"" << href << "\">" << esc << "</a></td>";
+//             rows << "<td data-key=\"size\" data-size=\"" << sizeStr << "\" class=\"small\">" << sizeStr << "</td>";
+//             rows << "<td data-key=\"mtime\" class=\"small\">" << mtimeStr << "</td></tr>\n";
+//         }
+//         closedir(d);
+//     }
+
+//     std::ostringstream html;
+//     html << "<!doctype html><html><head><meta charset=\"utf-8\"><title>Index of " << html_escape(request_path) << "</title>";
+//     html << "<style>body{font-family:Arial;margin:20px}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #eee}th{background:#fafafa}</style></head><body>";
+//     html << "<h1>Index of " << html_escape(request_path) << "</h1><table id=\"ix\"><thead><tr><th data-key=\"name\">Name</th><th data-key=\"size\">Size</th><th data-key=\"mtime\">Last modified</th></tr></thead><tbody>";
+//     html << rows.str();
+//     html << "</tbody></table></body></html>";
+//     return html.str();
+// }
+
+
+bool RequestParser::isDirectory(const std::string& path)
+{
+    struct stat statbuf;
+    if (stat(path.c_str(), &statbuf) != 0)
+    {
+        return false;
+    }
+    return S_ISDIR(statbuf.st_mode);
+}
+
+std::string RequestParser::make_autoindex_html(const std::string &dirpath, const std::string &request_path) 
+{
+    DIR *dir;
+    struct dirent *entry;
+    struct stat file_stat;
+    std::stringstream html;
+
+    dir = opendir(dirpath.c_str());
+    if (!dir) {
+        return ""; // Return empty string on error
+    }
+
+    html << "<!DOCTYPE html>\n"
+         << "<html>\n"
+         << "<head>\n"
+         << "    <title>Index of " << request_path << "</title>\n"
+         << "    <style>\n"
+         << "        body { font-family: Arial, sans-serif; margin: 20px; }\n"
+         << "        h1 { border-bottom: 1px solid #ccc; padding-bottom: 10px; }\n"
+         << "        table { border-collapse: collapse; width: 100%; }\n"
+         << "        th, td { text-align: left; padding: 8px; }\n"
+         << "        tr:nth-child(even) { background-color: #f2f2f2; }\n"
+         << "        th { background-color: #4CAF50; color: white; }\n"
+         << "        a { text-decoration: none; color: #0366d6; }\n"
+         << "        a:hover { text-decoration: underline; }\n"
+         << "    </style>\n"
+         << "</head>\n"
+         << "<body>\n"
+         << "    <h1>Index of " << request_path << "</h1>\n"
+         << "    <table>\n"
+         << "        <tr>\n"
+         << "            <th>Name</th>\n"
+         << "            <th>Last modified</th>\n"
+         << "            <th>Size</th>\n"
+         << "        </tr>\n";
+
+    // add parent directory link unless at root
+    if (request_path != "/")
+    {
+        html << "        <tr>\n"
+             << "            <td><a href=\"..\">..</a></td>\n"
+             << "            <td>-</td>\n"
+             << "            <td>-</td>\n"
+             << "        </tr>\n";
+    }
+
+    // collect all entries for sorting
+    std::vector<std::string> entries;
+    while ((entry = readdir(dir)) != NULL)
+    {
+        std::string name = entry->d_name;
+        if (name != "." && name != "..")
+        {
+            entries.push_back(name);
+        }
+    }
+    closedir(dir);
+
+    std::sort(entries.begin(), entries.end());
+
+    // Add each entry to the HTML
+    for (std::vector<std::string>::const_iterator it = entries.begin(); it != entries.end(); ++it)
+    {
+        const std::string& name = *it;
+        std::string fullPath = dirpath + "/" + name;
+        
+        if (stat(fullPath.c_str(), &file_stat) < 0)
+        {
+            continue; // Skip if stat fails
+        }
+        
+        char timeStr[100];
+        struct tm* timeinfo = localtime(&file_stat.st_mtime);
+        strftime(timeStr, sizeof(timeStr), "%Y-%m-%d %H:%M:%S", timeinfo);
+        
+        std::string sizeStr;
+        if (S_ISDIR(file_stat.st_mode))
+        {
+            sizeStr = "-";
+        }
+        else
+        {
+            double size = file_stat.st_size;
+            const char* units[] = {"B", "KB", "MB", "GB"};
+            int unit = 0;
+            
+            while (size > 1024 && unit < 3)
+            {
+                size /= 1024;
+                unit++;
+            }
+            
+            std::ostringstream ss;
+            ss << std::fixed << std::setprecision(unit > 0 ? 1 : 0) << size << " " << units[unit];
+            sizeStr = ss.str();
+        }
+        
+        html << "        <tr>\n"
+             << "            <td><a href=\"" << name << (S_ISDIR(file_stat.st_mode) ? "/" : "") << "\">" 
+             << name << (S_ISDIR(file_stat.st_mode) ? "/" : "") << "</a></td>\n"
+             << "            <td>" << timeStr << "</td>\n"
+             << "            <td>" << sizeStr << "</td>\n"
+             << "        </tr>\n";
+    }
+
+    html << "    </table>\n"
+         << "</body>\n"
+         << "</html>";
+
+    return html.str();
 }
